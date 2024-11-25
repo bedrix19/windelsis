@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+    #map { height: 500px; }
+    </style>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body>
+    <p>Leaflet 1.9.4</p>
+    <label for="apiSelector">Choose Weather API:</label>
+    <select id="apiSelector">
+        <option value="noaa">NOAA</option>
+        <option value="openWeather">OpenWeather</option>
+    </select>
+    <div id="map" style="height: 500px;"></div>
+  
+    <script type="module">
+        import WeatherMap from './src/windelsis.js';
+
+        const apiKeys = {
+            noaa: 'SvNwwLVCTXrHejSdyNEkeEunLYQwKDPU',
+            openWeather: '7aaea4f666d90222417b54056e2782a4',
+        };
+
+        const weatherMap = new WeatherMap('map', apiKeys);
+    </script>
+</body>
+</html>
