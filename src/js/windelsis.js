@@ -35,7 +35,7 @@ function initDemoMap() {
 */
   var layerControl = L.control.layers(baseLayers);
   layerControl.addTo(map);
-  map.setView([42.8, -8.5], 10);
+  map.setView([42.8, -7.5], 9);
 
   // pop up with coordinates on click
   map.on("click", function(e) {
@@ -67,11 +67,6 @@ const exampleData = [
   }
 ];
 
-// Convertir velocidad del viento de km/h a m/s
-function convertWindSpeed(speed) {
-  return speed * 0.27778;
-}
-
 // Convertir dirección del viento a componentes u y v
 function convertWindDirection(speed, direction) {
   const rad = direction * (Math.PI / 180);
@@ -100,9 +95,6 @@ function getMapBoundsCoordinates(map) {
 
 // Logica para construir el json para usar con leaflet-velocity
 function dataBuilder(uComponent, vComponent, nx, ny, dx, dy, boundaries) {
-  // Comprobar que tenemos la cantidad de datos correcta
-  
-
   const windData = [
     {
       header: {
@@ -148,10 +140,10 @@ function dataBuilder(uComponent, vComponent, nx, ny, dx, dy, boundaries) {
  * Los puntos de latitud de la API son multiplos de .0625 (Si mandamos uno distinto los redondea)
  * Se actualizan cada hora y cuarto
  */
-async function fetchWindData(latitudes, longitudes) {
+async function fetchWeatherData(latitudes, longitudes) {
   const latString = latitudes.join(',');
   const lonString = longitudes.join(',');
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&current_weather=true`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
   const response = await fetch(url);
   const data = await response.json();
   return data;
@@ -243,16 +235,19 @@ const { latitudes, longitudes } = generateGridCoordinates(gridLimits, nx, ny, dx
 
 var u_component = [], v_component = [];
 
-fetchWindData(latitudes, longitudes).then(data => {
+fetchWeatherData(latitudes, longitudes).then(data => {
   console.log("...", ...data);
-  console.log("data", data);
-  console.log("data", data[0].current_weather);
-  console.log(JSON.stringify(data[0], null, 2));
-
   console.log("data.length", data.length);
+
   for (let i = 0; i < data.length; i++) { // data.length should be equal to nx * ny
-    const windSpeedMs = convertWindSpeed(data[i].current_weather.windspeed);
-    const windDirection = data[i].current_weather.winddirection;
+    var windSpeedMs;
+    if(data[i].current_units.wind_speed_10m == "km/h") {
+      windSpeedMs = data[i].current.wind_speed_10m * 0.27778;
+    }else if(data[i].current_units.wind_speed_10m == "m/s") {
+      windSpeedMs = data[i].current.wind_speed_10m;
+    }else console.error("Unrecognized wind speed unit");
+
+    var windDirection = data[i].current.wind_direction_10m;
     const { u, v } = convertWindDirection(windSpeedMs, windDirection);
     u_component.push(u);
     v_component.push(v);
