@@ -35,7 +35,7 @@ function initDemoMap() {
 */
   var layerControl = L.control.layers(baseLayers);
   layerControl.addTo(map);
-  map.setView([42.8, -7.5], 9);
+  map.setView([42.8024, -1.7516], 7);
 
   // pop up with coordinates on click
   map.on("click", function(e) {
@@ -85,11 +85,31 @@ function getMapBoundsCoordinates(map) {
   const northWest = L.latLng(northEast.lat, southWest.lng);
   const southEast = L.latLng(southWest.lat, northEast.lng);
 
+  console.log("Puntos de los límites del mapa NW:", northWest," NE:", northEast," SW:", southWest," SE:", southEast);
+
+  function roundToMultiple(value, multiple, roundUp) {
+    return roundUp
+      ? Math.ceil(value / multiple) * multiple
+      : Math.floor(value / multiple) * multiple;
+  }
+
   return {
-    northWest: northWest,
-    northEast: northEast,
-    southWest: southWest,
-    southEast: southEast
+    northWest: L.latLng(
+      roundToMultiple(northWest.lat, 0.0625, true),
+      roundToMultiple(northWest.lng, 0.0625, false)
+    ),
+    northEast: L.latLng(
+      roundToMultiple(northEast.lat, 0.0625, true),
+      roundToMultiple(northEast.lng, 0.0625, true)
+    ),
+    southWest: L.latLng(
+      roundToMultiple(southWest.lat, 0.0625, false),
+      roundToMultiple(southWest.lng, 0.0625, false)
+    ),
+    southEast: L.latLng(
+      roundToMultiple(southEast.lat, 0.0625, false),
+      roundToMultiple(southEast.lng, 0.0625, true)
+    )
   };
 }
 
@@ -167,18 +187,27 @@ function initializeWindLayer(map, windData) {
 }
 
 // Calcular nx, ny, dx y dy
-function calculateGridParameters(bounds, resolution) {
+function calculateGridParameters(bounds, pointDistance=0.0625) {
   const lonRange = Math.abs(bounds.northEast.lng - bounds.southWest.lng);
   const latRange = Math.abs(bounds.northEast.lat - bounds.southWest.lat);
+  console.log("lonRange", lonRange, "latRange", latRange);
 
-  const nx = Math.ceil(lonRange * resolution) + 1;
-  const ny = Math.ceil(latRange * resolution) + 1;
+  let auxDistance = 0;
+  for(let i = 0; i < 16; i++) {
+    if(latRange <= 0.0625 * i || lonRange <= 0.0625 * i) {
+      auxDistance = 0.0625 * i;
+      console.log("Se ajusta a", auxDistance * i);
+      break;
+    }
+  }
 
-  const dx = lonRange / (nx-1);
-  const dy = latRange / (ny-1);
-  // Si quisiéramos que el grid sea cuadrado, podríamos hacer dx = dy = Math.max(dx, dy); y
-  // para multiplos de .0 y .5, podríamos hacer dx = dy = Math.ceil(Math.max(dx, dy) * 2) / 2;
-  // y multiplos de .0
+  if(auxDistance != 0 && auxDistance < pointDistance) pointDistance = auxDistance;
+
+  const nx = Math.ceil(lonRange / pointDistance) + 1;
+  const ny = Math.ceil(latRange / pointDistance) + 1;
+
+  const dx = pointDistance;
+  const dy = pointDistance;
 
   return { nx, ny, dx, dy };
 }
@@ -220,8 +249,8 @@ console.log("southWest", gridLimits.southWest);
 console.log("southEast", gridLimits.southEast);
 
 // Datos para la cuadricula
-const resolution = 3;
-const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, resolution);
+const pointDistance = 2;
+const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
 
 console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
 
@@ -269,6 +298,7 @@ fetchWeatherData(latitudes, longitudes).then(data => {
     maxVelocity: 10,
   });
 
-  // Añadir la capa al control de capas
-  layerControl.addOverlay(velocityLayer, "API Wind Data");
+  layerControl.addOverlay(velocityLayer, "API Wind Data"); // Añadir la capa al control de capas
+  velocityLayer.addTo(map); // Añadir la capa al mapa 'por defecto'
+  map.setZoom(6);
 });
