@@ -1,53 +1,3 @@
-function initDemoMap() {
-  var Esri_WorldImagery = L.tileLayer(
-    "http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    {
-      attribution:
-        "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, " +
-        "AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
-    }
-  );
-
-  var Esri_DarkGreyCanvas = L.tileLayer(
-    "http://{s}.sm.mapstack.stamen.com/" +
-      "(toner-lite,$fff[difference],$fff[@23],$fff[hsl-saturation@20])/" +
-      "{z}/{x}/{y}.png",
-    {
-      attribution:
-        "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, " +
-        "NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community"
-    }
-  );
-
-  var baseLayers = {
-    Satellite: Esri_WorldImagery,
-    "Grey Canvas": Esri_DarkGreyCanvas
-  };
-
-  var map = L.map("map", {
-    layers: [Esri_WorldImagery]
-  });
-/*
-  L.marker([42, -8]).addTo(map).bindPopup("42, -8");
-  L.marker([42, -9]).addTo(map).bindPopup("42, -9");
-  L.marker([43, -8]).addTo(map).bindPopup("43, -8");
-  L.marker([43, -9]).addTo(map).bindPopup("43, -9");
-*/
-  var layerControl = L.control.layers(baseLayers);
-  layerControl.addTo(map);
-  map.setView([42.8024, -1.7516], 7);
-
-  // pop up with coordinates on click
-  map.on("click", function(e) {
-    alert("Coordinates: " + e.latlng.lat + ", " + e.latlng.lng);
-  });
-
-  return {
-    map: map,
-    layerControl: layerControl
-  };
-}
-
 // Ejemplo de resutlado de API Open-Meteo
 const exampleData = [
   {
@@ -213,7 +163,7 @@ function calculateGridParameters(bounds, pointDistance=0.0625) {
 }
 
 // Generar las coordenadas de los puntos
-function generateGridCoordinates(bounds, nx, ny, dx, dy) {
+function generateGridCoordinates(map, bounds, nx, ny, dx, dy) {
   const longitudes = [];
   const latitudes = [];
 
@@ -235,70 +185,65 @@ function generateGridCoordinates(bounds, nx, ny, dx, dy) {
   return { latitudes, longitudes };
 }
 
-// Inicializar el mapa de demostración
-var mapStuff = initDemoMap();
-var map = mapStuff.map;
-var layerControl = mapStuff.layerControl;
+export function fetchAndDrawWindData(map, layerControl, pointDistance = 1) {
+  // Obtener los límites del mapa
+  var gridLimits = getMapBoundsCoordinates(map);
 
-// Obtener los límites del mapa
-var gridLimits = getMapBoundsCoordinates(map);
+  console.log("northWest", gridLimits.northWest);
+  console.log("northEast", gridLimits.northEast);
+  console.log("southWest", gridLimits.southWest);
+  console.log("southEast", gridLimits.southEast);
 
-console.log("northWest", gridLimits.northWest);
-console.log("northEast", gridLimits.northEast);
-console.log("southWest", gridLimits.southWest);
-console.log("southEast", gridLimits.southEast);
+  // Datos para la cuadricula
+  const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
 
-// Datos para la cuadricula
-const pointDistance = 2;
-const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
+  console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
 
-console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
+  var la1 = gridLimits.northEast.lat, la2 = gridLimits.southEast.lat;
+  var lo1 = gridLimits.northWest.lng, lo2 = gridLimits.southWest.lng;
+  console.log("Primer punto", lo1, la1);
+  console.log("Segundo punto", lo2, la2);
 
-var la1 = gridLimits.northEast.lat, la2 = gridLimits.southEast.lat;
-var lo1 = gridLimits.northWest.lng, lo2 = gridLimits.southWest.lng;
-console.log("Primer punto", lo1, la1);
-console.log("Segundo punto", lo2, la2);
+  // Generar las coordenadas de los puntos
+  const { latitudes, longitudes } = generateGridCoordinates(map, gridLimits, nx, ny, dx, dy);
 
-// Generar las coordenadas de los puntos
-const { latitudes, longitudes } = generateGridCoordinates(gridLimits, nx, ny, dx, dy);
+  var u_component = [], v_component = [];
 
-var u_component = [], v_component = [];
+  fetchWeatherData(latitudes, longitudes).then(data => {
+    console.log("...", ...data);
+    console.log("data.length", data.length);
 
-fetchWeatherData(latitudes, longitudes).then(data => {
-  console.log("...", ...data);
-  console.log("data.length", data.length);
+    for (let i = 0; i < data.length; i++) { // data.length should be equal to nx * ny
+      var windSpeedMs;
+      if(data[i].current_units.wind_speed_10m == "km/h") {
+        windSpeedMs = data[i].current.wind_speed_10m * 0.27778;
+      }else if(data[i].current_units.wind_speed_10m == "m/s") {
+        windSpeedMs = data[i].current.wind_speed_10m;
+      }else console.error("Unrecognized wind speed unit");
 
-  for (let i = 0; i < data.length; i++) { // data.length should be equal to nx * ny
-    var windSpeedMs;
-    if(data[i].current_units.wind_speed_10m == "km/h") {
-      windSpeedMs = data[i].current.wind_speed_10m * 0.27778;
-    }else if(data[i].current_units.wind_speed_10m == "m/s") {
-      windSpeedMs = data[i].current.wind_speed_10m;
-    }else console.error("Unrecognized wind speed unit");
+      var windDirection = data[i].current.wind_direction_10m;
+      const { u, v } = convertWindDirection(windSpeedMs, windDirection);
+      u_component.push(u);
+      v_component.push(v);
+    }
 
-    var windDirection = data[i].current.wind_direction_10m;
-    const { u, v } = convertWindDirection(windSpeedMs, windDirection);
-    u_component.push(u);
-    v_component.push(v);
-  }
-  
-  // Construir los datos para leaflet-velocity
-  var windData = dataBuilder(u_component, v_component, nx, ny, dx, dy, gridLimits);
-  
-  // initializeWindLayer(map, windData);
-  var velocityLayer = L.velocityLayer({
-    displayValues: true,
-    displayOptions: {
-      velocityType: "Global Wind",
-      position: "bottomleft",
-      emptyString: "No wind data",
-      showCardinal: true
-    },
-    data: windData,
-    maxVelocity: 10,
+    // Construir los datos para leaflet-velocity
+    var windData = dataBuilder(u_component, v_component, nx, ny, dx, dy, gridLimits);
+
+    // initializeWindLayer(map, windData);
+    var velocityLayer = L.velocityLayer({
+      displayValues: true,
+      displayOptions: {
+        velocityType: "Global Wind",
+        // ... otros parámetros ...
+      },
+      data: windData,
+      maxVelocity: 15
+    });
+
+    layerControl.addOverlay(velocityLayer, "API Wind Data"); // Añadir la capa al control de capas
+    velocityLayer.addTo(map); // Añadir la capa al mapa 'por defecto'
+    map.setZoom(map.getZoom() - 1); // Ajustar el zoom para que se vea la capa
+    map.addLayer(velocityLayer);
   });
-
-  layerControl.addOverlay(velocityLayer, "API Wind Data"); // Añadir la capa al control de capas
-  velocityLayer.addTo(map); // Añadir la capa al mapa 'por defecto'
-  map.setZoom(6);
-});
+}

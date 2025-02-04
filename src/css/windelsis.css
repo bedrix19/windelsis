@@ -9,10 +9,6 @@ body {
     color: #CCC;
 }
 
-a {
-    color: #3388ff;
-}
-
 #map {
     position: absolute;
     height: 100%;
@@ -22,4 +18,42 @@ a {
 
 .leaflet-canvas-layer {
     opacity: 0.55;
+}
+
+#mapControls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Space between elements */
+    background: rgba(255, 255, 255, 0.9);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+#fetchWindDataButton {
+    padding: 10px 20px;
+    background-color: #3388ff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#fetchWindDataButton:hover {
+    background-color: #2a6fcc;
+}
+
+#pointDistance {
+    padding: 8px 12px;
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    color: #333;
 }
