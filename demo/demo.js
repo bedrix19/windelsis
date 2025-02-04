@@ -49,7 +49,11 @@ function initDemoMap() {
 var mapStuff = initDemoMap();
 var map = mapStuff.map;
 var layerControl = mapStuff.layerControl;
+var velocityLayer = null;
+
 document.getElementById('fetchWindDataButton').addEventListener('click', () => {
     const pointDistance = parseFloat(document.getElementById('pointDistance').value) || 1;
-    fetchAndDrawWindData(map, layerControl, pointDistance);
+    fetchAndDrawWindData(map, layerControl, pointDistance, velocityLayer).then(newLayer => {
+        velocityLayer = newLayer;
+    });
 });
