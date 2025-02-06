@@ -110,7 +110,28 @@ function dataBuilder(uComponent, vComponent, nx, ny, dx, dy, boundaries) {
  * Los puntos de latitud de la API son multiplos de .0625 (Si mandamos uno distinto los redondea)
  * Se actualizan cada hora y cuarto
  */
-async function fetchWeatherData(latitudes, longitudes) {
+async function fetchWeatherData(latitudes, longitudes, nx, ny, dataType = 'current') {
+  const results = [];
+  const latLonPairs = [];
+
+  // Generar todas las combinaciones de latitudes y longitudes
+  for (const _ of latitudes) {
+    for (const _ of longitudes) {
+      latLonPairs.push({ lat, lon });
+    }
+  }
+  
+  for (const pair of latLonPairs){
+    console.log("pair", pair, pair.lat, pair.lon);
+    const latString = Array(longitudes.length).fill(lat).join(',');
+    const lonString = longitudes.join(',');
+    const test = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pair.lat}&longitude=${pair.lon}&current=temperature_2m&wind_speed_unit=ms`);
+    const data = await test.json();
+    console.log("test-data", data);
+    results.push(data);
+    console.log("results", results);
+  }
+  
   const latString = latitudes.join(',');
   const lonString = longitudes.join(',');
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
@@ -209,7 +230,7 @@ export async function fetchAndDrawWindData(map, layerControl, pointDistance = 1,
 
   var u_component = [], v_component = [];
 
-  const data = await fetchWeatherData(latitudes, longitudes);
+  const data = await fetchWeatherData(latitudes, longitudes, nx, ny, 'current');
   console.log("...", ...data);
   console.log("data.length", data.length);
 
@@ -239,7 +260,6 @@ export async function fetchAndDrawWindData(map, layerControl, pointDistance = 1,
       displayOptions: {
         velocityType: "Global Wind",
         emptyString: "No velocity data"
-        // ... otros parámetros ...
       },
       data: windData,
       maxVelocity: 15
