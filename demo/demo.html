@@ -10,7 +10,27 @@
     <div id="mapControls">
       <button id="fetchWindDataButton">Fetch Wind Data</button>
       <label for="pointDistance">Point Distance:</label>
-      <input type="number" id="pointDistance" value="1" step="0.1" />
+      <input type="number" id="pointDistance" value="1" step="0.0625" />
+      <label for="mapAdjustment">Map Adjustment:</label>
+      <input type="number" 
+              id="mapAdjustment" 
+              placeholder="Set map arrangement"
+              step="1" />
+      <label for="forecastDate">Fetching Date:</label>
+      <input  type="date" 
+              id="forecastDate"
+              min="2016-01-01" 
+              max="2025-02-21" 
+              step="1" />
+      <input type="number" 
+              id="forecastTime" 
+              placeholder="Set an hour (0-23)"
+              step="1" />
+      <input  type="datetime-local" 
+              id="forecastDateTime" 
+              min="2016-01-01T00:00" 
+              max="2025-02-21T23:59" 
+              step="1">
     </div>
 
     <!--vendor-->

@@ -28,7 +28,7 @@ function convertWindDirection(speed, direction) {
 }
 
 // Obtener las coordenadas de los límites del mapa
-function getMapBoundsCoordinates(map) {
+function getMapBoundsCoordinates(map, adjustment = 0) {
   const bounds = map.getBounds();
   const southWest = bounds.getSouthWest();
   const northEast = bounds.getNorthEast();
@@ -45,26 +45,74 @@ function getMapBoundsCoordinates(map) {
 
   return {
     northWest: L.latLng(
-      roundToMultiple(northWest.lat, 0.0625, true),
-      roundToMultiple(northWest.lng, 0.0625, false)
+      roundToMultiple(northWest.lat, 0.0625, true) + adjustment,
+      roundToMultiple(northWest.lng, 0.0625, false) - adjustment
     ),
     northEast: L.latLng(
-      roundToMultiple(northEast.lat, 0.0625, true),
-      roundToMultiple(northEast.lng, 0.0625, true)
+      roundToMultiple(northEast.lat, 0.0625, true) + adjustment,
+      roundToMultiple(northEast.lng, 0.0625, true) + adjustment
     ),
     southWest: L.latLng(
-      roundToMultiple(southWest.lat, 0.0625, false),
-      roundToMultiple(southWest.lng, 0.0625, false)
+      roundToMultiple(southWest.lat, 0.0625, false) - adjustment,
+      roundToMultiple(southWest.lng, 0.0625, false) - adjustment
     ),
     southEast: L.latLng(
-      roundToMultiple(southEast.lat, 0.0625, false),
-      roundToMultiple(southEast.lng, 0.0625, true)
+      roundToMultiple(southEast.lat, 0.0625, false) - adjustment,
+      roundToMultiple(southEast.lng, 0.0625, true) + adjustment
     )
   };
 }
 
 // Logica para construir el json para usar con leaflet-velocity
-function dataBuilder(uComponent, vComponent, nx, ny, dx, dy, boundaries) {
+function dataBuilder(data, nx, ny, dx, dy, boundaries, dateType = 'current', hour_index) {
+  var u_component = [], v_component = [];
+  if(dateType == 'forecast_hourly') {
+    for (let i = 0; i < data.length; i++) { // data.length should be equal to nx * ny
+      var windSpeedMs;
+      if(data[i].hourly_units.wind_speed_10m == "km/h") {
+        windSpeedMs = data[i].hourly.wind_speed_10m[hour_index] * 0.27778;
+      }else if(data[i].hourly_units.wind_speed_10m == "m/s") {
+        windSpeedMs = data[i].hourly.wind_speed_10m[hour_index];
+      }else console.error("Unrecognized wind speed unit");
+  
+      var windDirection = data[i].hourly.wind_direction_10m[hour_index];
+      const { u, v } = convertWindDirection(windSpeedMs, windDirection);
+      u_component.push(u);
+      v_component.push(v);
+    }
+  }
+  else if (dateType == 'forecast') {
+    for (let i = 0; i < data.length; i++) {
+      var windSpeedMs;
+      if(data[i].daily_units.wind_speed_10m_max == "km/h") {
+        windSpeedMs = data[i].daily.wind_speed_10m_max[0] * 0.27778;
+      }else if(data[i].daily_units.wind_speed_10m_max == "m/s") {
+        windSpeedMs = data[i].daily.wind_speed_10m_max[0];
+      }else console.error("Unrecognized wind speed unit");
+  
+      var windDirection = data[i].daily.wind_direction_10m_dominant[0];
+      const { u, v } = convertWindDirection(windSpeedMs, windDirection);
+      u_component.push(u);
+      v_component.push(v);
+    }
+  }
+  else if(dateType == 'current') {
+    for (let i = 0; i < data.length; i++) {
+      var windSpeedMs;
+      if(data[i].current_units.wind_speed_10m == "km/h") {
+        windSpeedMs = data[i].current.wind_speed_10m * 0.27778;
+      }else if(data[i].current_units.wind_speed_10m == "m/s") {
+        windSpeedMs = data[i].current.wind_speed_10m;
+      }else console.error("Unrecognized wind speed unit");
+  
+      var windDirection = data[i].current.wind_direction_10m;
+      const { u, v } = convertWindDirection(windSpeedMs, windDirection);
+      u_component.push(u);
+      v_component.push(v);
+    }
+  }
+  else console.error("Unrecognized data type");
+
   const windData = [
     {
       header: {
@@ -81,7 +129,7 @@ function dataBuilder(uComponent, vComponent, nx, ny, dx, dy, boundaries) {
         dx: dx,
         dy: dy
       },
-      data: uComponent
+      data: u_component
     },
     {
       header: {
@@ -98,7 +146,7 @@ function dataBuilder(uComponent, vComponent, nx, ny, dx, dy, boundaries) {
         dx: dx,
         dy: dy
       },
-      data: vComponent
+      data: v_component
     }
   ];
 
@@ -110,7 +158,8 @@ function dataBuilder(uComponent, vComponent, nx, ny, dx, dy, boundaries) {
  * Los puntos de latitud de la API son multiplos de .0625 (Si mandamos uno distinto los redondea)
  * Se actualizan cada hora y cuarto
  */
-async function fetchWeatherData(latitudes, longitudes, nx, ny, dataType = 'current') {
+async function fetchWeatherData(latitudes, longitudes, nx, ny, dateType = 'current', start_date = null, end_date = null) {
+  /*
   const results = [];
   const latLonPairs = [];
 
@@ -131,10 +180,23 @@ async function fetchWeatherData(latitudes, longitudes, nx, ny, dataType = 'curre
     results.push(data);
     console.log("results", results);
   }
-  
+  */
+  let url;
   const latString = latitudes.join(',');
   const lonString = longitudes.join(',');
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+  switch(dateType) {
+  case 'current':
+    url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+    break;
+  case 'forecast':
+    url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&start_date=${start_date}&end_date=${end_date}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=ms&timezone=auto`;
+    break;
+  case 'forecast_hourly':
+    url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&start_date=${start_date}&end_date=${end_date}&hourly=temperature_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto`;
+    break;
+  default:
+    console.error("Unrecognized data type");
+  }
   const response = await fetch(url);
   const data = await response.json();
   return data;
@@ -144,7 +206,7 @@ function initializeWindLayer(map, windData) {
   var velocityLayer = L.velocityLayer({
     displayValues: true,
     displayOptions: {
-      velocityType: "Global Wind",
+      velocityType: "Wind data",
       position: "bottomleft",
       emptyString: "No wind data"
     },
@@ -195,20 +257,19 @@ function generateGridCoordinates(map, bounds, nx, ny, dx, dy) {
 
       console.log(`Lng: ${bounds.northWest.lng + j * dx}, Lat: ${bounds.northWest.lat - i * dy}`);
 
-      // Añadir los puntos al mapa
-      // L.marker([bounds.northWest.lat - i * dy, bounds.northWest.lng + j * dx]).addTo(map)
-      //   .bindPopup(
-      //     `Lat: ${bounds.northWest.lat - i * dy}, Lng: ${bounds.northWest.lng + j * dx}`
-      //   );
+     // Añadir los puntos al mapa
+     // L.marker([bounds.northWest.lat - i * dy, bounds.northWest.lng + j * dx]).addTo(map).bindPopup(`Lat: ${bounds.northWest.lat - i * dy}, Lng: ${bounds.northWest.lng + j * dx}`);
     }
   }
 
   return { latitudes, longitudes };
 }
 
-export async function fetchAndDrawWindData(map, layerControl, pointDistance = 1, velocityLayer = null) {
+export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1, velocityLayer = null, dateType, start_date = null, end_date = null, hour_index = null, adjustment = 0}) {
+  console.log("Tipo de datos: ",dateType)
+
   // Obtener los límites del mapa
-  var gridLimits = getMapBoundsCoordinates(map);
+  var gridLimits = getMapBoundsCoordinates(map, adjustment);
 
   console.log("northWest", gridLimits.northWest);
   console.log("northEast", gridLimits.northEast);
@@ -228,28 +289,13 @@ export async function fetchAndDrawWindData(map, layerControl, pointDistance = 1,
   // Generar las coordenadas de los puntos
   const { latitudes, longitudes } = generateGridCoordinates(map, gridLimits, nx, ny, dx, dy);
 
-  var u_component = [], v_component = [];
-
-  const data = await fetchWeatherData(latitudes, longitudes, nx, ny, 'current');
+  // Obtener los datos del API
+  const data = await fetchWeatherData(latitudes, longitudes, nx, ny, dateType, start_date, end_date);
   console.log("...", ...data);
   console.log("data.length", data.length);
 
-  for (let i = 0; i < data.length; i++) { // data.length should be equal to nx * ny
-    var windSpeedMs;
-    if(data[i].current_units.wind_speed_10m == "km/h") {
-      windSpeedMs = data[i].current.wind_speed_10m * 0.27778;
-    }else if(data[i].current_units.wind_speed_10m == "m/s") {
-      windSpeedMs = data[i].current.wind_speed_10m;
-    }else console.error("Unrecognized wind speed unit");
-
-    var windDirection = data[i].current.wind_direction_10m;
-    const { u, v } = convertWindDirection(windSpeedMs, windDirection);
-    u_component.push(u);
-    v_component.push(v);
-  }
-
   // Construir los datos para leaflet-velocity
-  var windData = dataBuilder(u_component, v_component, nx, ny, dx, dy, gridLimits);
+  const windData = dataBuilder(data, nx, ny, dx, dy, gridLimits, dateType, hour_index);
 
   if (velocityLayer) {
     velocityLayer.setData(windData); // Actualizar los datos de la capa existente
@@ -262,14 +308,22 @@ export async function fetchAndDrawWindData(map, layerControl, pointDistance = 1,
         emptyString: "No velocity data"
       },
       data: windData,
-      maxVelocity: 15
+      // windy parameters
+      maxVelocity: 10,
+      minVelocity: 0,
+      velocityScale: 0.005,
+      particleAge: 90,
+      lineWidth: 1,
+      particleMultiplier: 1 / 300,
+      frameRate: 15,
     });
 
     layerControl.addOverlay(velocityLayer, "API Wind Data"); // Añadir la capa
     velocityLayer.addTo(map); // Mostrar la capa
     map.addLayer(velocityLayer); // Añadirla al campo de control
   }
-  map.setZoom(map.getZoom() - 1); // Ajustar el zoom para que se vea la capa
+  //map.setZoom(map.getZoom() - 1); // Ajustar el zoom para que se vea la capa
 
+  // Retornar la capa para poder actualizarla
   return velocityLayer;
 }

@@ -53,7 +53,24 @@ var velocityLayer = null;
 
 document.getElementById('fetchWindDataButton').addEventListener('click', () => {
     const pointDistance = parseFloat(document.getElementById('pointDistance').value) || 1;
-    fetchAndDrawWindData(map, layerControl, pointDistance, velocityLayer).then(newLayer => {
+    const forecastDate = document.getElementById('forecastDate').value;
+    const forecastTime = parseInt(document.getElementById('forecastTime').value);
+    const adjustment = parseInt(document.getElementById('mapAdjustment').value);
+    console.log(forecastTime);
+    let dateType;
+    if(forecastTime && forecastDate) dateType = 'forecast_hourly';
+    else if (forecastDate) dateType = 'forecast';
+    fetchAndDrawWindData({
+      map:map,
+      layerControl:layerControl,
+      pointDistance:pointDistance,
+      velocityLayer:velocityLayer,
+      dateType:dateType || 'current',
+      start_date:forecastDate,
+      end_date:forecastDate,
+      hour_index:forecastTime,
+      adjustment:adjustment || 0
+    }).then(newLayer => {
         velocityLayer = newLayer;
     });
 });
