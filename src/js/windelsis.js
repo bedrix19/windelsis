@@ -159,47 +159,61 @@ function dataBuilder(data, nx, ny, dx, dy, boundaries, dateType = 'current', hou
  * Se actualizan cada hora y cuarto
  */
 async function fetchWeatherData(latitudes, longitudes, nx, ny, dateType = 'current', start_date = null, end_date = null) {
-  /*
-  const results = [];
-  const latLonPairs = [];
-
-  // Generar todas las combinaciones de latitudes y longitudes
-  for (const _ of latitudes) {
-    for (const _ of longitudes) {
-      latLonPairs.push({ lat, lon });
-    }
-  }
+  const fetchPromises = []; // Array to store all fetch promises
+  const orderedResults = Array(ny).fill().map(() => Array(nx).fill(null)); // creates 2D array to store data
   
-  for (const pair of latLonPairs){
-    console.log("pair", pair, pair.lat, pair.lon);
-    const latString = Array(longitudes.length).fill(lat).join(',');
-    const lonString = longitudes.join(',');
-    const test = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pair.lat}&longitude=${pair.lon}&current=temperature_2m&wind_speed_unit=ms`);
-    const data = await test.json();
-    console.log("test-data", data);
-    results.push(data);
-    console.log("results", results);
+  for (let rowIndex = 0; rowIndex < latitudes.length; rowIndex++) {
+    const lat = latitudes[rowIndex];
+    // Para esta fila, repetir la misma latitud para cada longitud
+    const latParams = new Array(nx).fill(lat).join(',');
+    // Obtener las longitudes para esta fila
+    const lonParams = longitudes.join(',');
+    
+    let url;
+    switch(dateType) {
+      case 'current':
+        url = `https://api.open-meteo.com/v1/forecast?latitude=${latParams}&longitude=${lonParams}&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+        break;
+      case 'forecast':
+        url = `https://api.open-meteo.com/v1/forecast?latitude=${latParams}&longitude=${lonParams}&start_date=${start_date}&end_date=${end_date}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=ms&timezone=auto`;
+        break;
+      case 'forecast_hourly':
+        url = `https://api.open-meteo.com/v1/forecast?latitude=${latParams}&longitude=${lonParams}&start_date=${start_date}&end_date=${end_date}&hourly=temperature_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto`;
+        break;
+      default:
+        console.error("Unrecognized data type");
+    }
+
+    // Store promise with its row index for ordering later
+    fetchPromises.push(
+      fetch(url)
+        .then(response => {
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          return response.json();
+        })
+        .then(data => ({data, rowIndex}))
+    );
   }
-  */
-  let url;
-  const latString = latitudes.join(',');
-  const lonString = longitudes.join(',');
-  switch(dateType) {
-  case 'current':
-    url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
-    break;
-  case 'forecast':
-    url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&start_date=${start_date}&end_date=${end_date}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=ms&timezone=auto`;
-    break;
-  case 'forecast_hourly':
-    url = `https://api.open-meteo.com/v1/forecast?latitude=${latString}&longitude=${lonString}&start_date=${start_date}&end_date=${end_date}&hourly=temperature_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto`;
-    break;
-  default:
-    console.error("Unrecognized data type");
+
+  try {
+    // Wait for all fetches to complete
+    const results = await Promise.all(fetchPromises);
+    
+    // Order results into grid
+    results.forEach(({data, rowIndex}) => {
+      data.forEach((point, colIndex) => {
+        orderedResults[rowIndex][colIndex] = point;
+      });
+    });
+
+    // Convert 2D array to 1D array ordered from NW to SE
+    const finalResults = orderedResults.flat();
+    return finalResults;
+    
+  } catch (error) {
+    console.error('Fetching weather data failed:', error);
+    throw error;
   }
-  const response = await fetch(url);
-  const data = await response.json();
-  return data;
 }
 
 function initializeWindLayer(map, windData) {
@@ -247,20 +261,10 @@ function calculateGridParameters(bounds, pointDistance=0.0625) {
 
 // Generar las coordenadas de los puntos
 function generateGridCoordinates(map, bounds, nx, ny, dx, dy) {
-  const longitudes = [];
-  const latitudes = [];
+  const longitudes = [], latitudes = [];
 
-  for (let i = 0; i < ny; i++) {
-    for (let j = 0; j < nx; j++) {
-      longitudes.push(bounds.northWest.lng + j * dx);
-      latitudes.push(bounds.northWest.lat - i * dy);
-
-      console.log(`Lng: ${bounds.northWest.lng + j * dx}, Lat: ${bounds.northWest.lat - i * dy}`);
-
-     // Añadir los puntos al mapa
-     // L.marker([bounds.northWest.lat - i * dy, bounds.northWest.lng + j * dx]).addTo(map).bindPopup(`Lat: ${bounds.northWest.lat - i * dy}, Lng: ${bounds.northWest.lng + j * dx}`);
-    }
-  }
+  for (let i=0;i<ny;i++) latitudes.push(bounds.northWest.lat - i * dy);
+  for (let j=0;j<nx;j++) longitudes.push(bounds.northWest.lng + j * dx);
 
   return { latitudes, longitudes };
 }
@@ -307,8 +311,8 @@ export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1
         velocityType: "Global Wind",
         emptyString: "No velocity data"
       },
-      data: windData,
       // windy parameters
+      data: windData,
       maxVelocity: 10,
       minVelocity: 0,
       velocityScale: 0.005,
