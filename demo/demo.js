@@ -32,7 +32,7 @@ function initDemoMap() {
 
     var layerControl = L.control.layers(baseLayers);
     layerControl.addTo(map);
-    map.setView([42.8024, -1.7516], 7);
+    map.setView([42.9525, -7.7746], 8);
   
     // pop up with coordinates on click
     map.on("click", function(e) {
