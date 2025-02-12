@@ -8,30 +8,48 @@
   <body>
     <div id="map"></div>
     <div id="mapControls">
-      <button id="fetchWindDataButton">Fetch Wind Data</button>
+      <button id="fetchWindDataButton" class="button-style">Fetch Wind Data</button>
       <label for="pointDistance">Point Distance:</label>
-      <input type="number" id="pointDistance" value="1" step="0.0625" />
+      <input type="number" id="pointDistance" class="input-style" value="1" step="0.0625" />
       <label for="mapAdjustment">Map Adjustment:</label>
       <input type="number" 
-              id="mapAdjustment" 
+              id="mapAdjustment"
+              class="input-style"
               placeholder="Set map arrangement"
               step="1" />
       <label for="forecastDate">Fetching Date:</label>
       <input  type="date" 
               id="forecastDate"
+              class="input-style"
               min="2016-01-01" 
               max="2025-02-21" 
               step="1" />
       <input type="number" 
-              id="forecastTime" 
+              id="forecastTime"
+              class="input-style"
               placeholder="Set an hour (0-23)"
               step="1" />
       <input  type="datetime-local" 
-              id="forecastDateTime" 
+              id="forecastDateTime"
+              class="input-style"
               min="2016-01-01T00:00" 
               max="2025-02-21T23:59" 
               step="1">
-    </div>
+      <button id="updateWindyParams" class="button-style">Update Windy Parameters</button>
+      <label for="maxVelocity">Max Velocity:</label>
+      <input type="number" class="input-style" id="maxVelocity" value="10" step="1" />
+      <label for="minVelocity">Min Velocity:</label>
+      <input type="number" class="input-style" id="minVelocity" value="0" step="1" />
+      <label for="velocityScale">Velocity Scale:</label>
+      <input type="number" class="input-style" id="velocityScale" value="0.005" step="0.01" />
+      <label for="particleAge">Particle Age:</label>
+      <input type="number" class="input-style" id="particleAge" value="90" step="10" />
+      <label for="lineWidth">Line Width:</label>
+      <input type="number" class="input-style" id="lineWidth" value="1" step="1" />
+      <label for="particleMultiplier">Particle Multiplier:</label>
+      <input type="number" class="input-style" id="particleMultiplier" value="0.003" step="0.005" />
+      <label for="frameRate">Frame Rate:</label>
+      <input type="number" class="input-style" id="frameRate" value="15" step="1" />
 
     <!--vendor-->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>

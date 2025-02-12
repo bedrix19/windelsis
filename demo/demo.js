@@ -56,6 +56,16 @@ document.getElementById('fetchWindDataButton').addEventListener('click', () => {
     const forecastDate = document.getElementById('forecastDate').value;
     const forecastTime = parseInt(document.getElementById('forecastTime').value);
     const adjustment = parseInt(document.getElementById('mapAdjustment').value);
+    const windyParameters = {
+      maxVelocity: parseFloat(document.getElementById('maxVelocity').value),
+      minVelocity: parseFloat(document.getElementById('minVelocity').value),
+      velocityScale: parseFloat(document.getElementById('velocityScale').value),
+      particleAge: parseInt(document.getElementById('particleAge').value),
+      lineWidth: parseFloat(document.getElementById('lineWidth').value),
+      particleMultiplier: parseFloat(document.getElementById('particleMultiplier').value),
+      frameRate: parseInt(document.getElementById('frameRate').value)
+    };
+
     console.log(forecastTime);
     let dateType;
     if(forecastTime && forecastDate) dateType = 'forecast_hourly';
@@ -69,8 +79,22 @@ document.getElementById('fetchWindDataButton').addEventListener('click', () => {
       start_date:forecastDate,
       end_date:forecastDate,
       hour_index:forecastTime,
-      adjustment:adjustment || 0
+      adjustment:adjustment || 0,
+      windyParameters:windyParameters
     }).then(newLayer => {
         velocityLayer = newLayer;
     });
+});
+
+document.getElementById('updateWindyParams').addEventListener('click', () => {
+  console.log('Updating windy parameters');
+  if (velocityLayer) velocityLayer.setOptions({
+    maxVelocity: parseFloat(document.getElementById('maxVelocity').value),
+    minVelocity: parseFloat(document.getElementById('minVelocity').value),
+    velocityScale: parseFloat(document.getElementById('velocityScale').value),
+    particleAge: parseInt(document.getElementById('particleAge').value),
+    lineWidth: parseFloat(document.getElementById('lineWidth').value),
+    particleMultiplier: parseFloat(document.getElementById('particleMultiplier').value),
+    frameRate: parseInt(document.getElementById('frameRate').value)
+  });
 });

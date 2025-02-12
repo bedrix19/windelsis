@@ -392,7 +392,12 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
 
     var size = this._map.getSize(); // bounds, width, height, extent
 
-
+    let la1 = this.options.data[0].header.la1;
+    let la2 = this.options.data[0].header.la2;
+    let lo1 = this.options.data[0].header.lo1;
+    let lo2 = this.options.data[0].header.lo2;
+    
+    //this._windy.start([[0, 0], [size.x, size.y]], size.x, size.y, [[lo1, lo2], [lo2, la1]]);
     this._windy.start([[0, 0], [size.x, size.y]], size.x, size.y, [[bounds._southWest.lng, bounds._southWest.lat], [bounds._northEast.lng, bounds._northEast.lat]]);
   },
   _initWindy: function _initWindy(self) {
@@ -409,12 +414,14 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
 
     this.onDrawLayer();
 
-    this._map.on("dragstart", self._windy.stop);
+    //this._map.on("dragstart", self._windy.stop);
 
-    this._map.on("dragend", self._clearAndRestart);
+    // this._map.on("dragend", self._clearAndRestart);
 
-    this._map.on("zoomstart", self._windy.stop);
-
+    // this._map.on("zoomstart", self._windy.stop);
+    console.log("zoom activated");
+    this._map.on('drag', (event) => console.log("map_zoom_Event"));
+    this._map.on('drag', (event) => self._startWindy());
     this._map.on("zoomend", self._clearAndRestart);
 
     this._map.on("resize", self._clearWind);
@@ -435,6 +442,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
     }
   },
   _clearAndRestart: function _clearAndRestart() {
+    console.log("cleaqr and restart");
     if (this._context) this._context.clearRect(0, 0, 3000, 3000);
     if (this._windy) this._startWindy();
   },

@@ -269,7 +269,7 @@ function generateGridCoordinates(map, bounds, nx, ny, dx, dy) {
   return { latitudes, longitudes };
 }
 
-export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1, velocityLayer = null, dateType, start_date = null, end_date = null, hour_index = null, adjustment = 0}) {
+export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1, velocityLayer = null, dateType, start_date = null, end_date = null, hour_index = null, adjustment = 0, windyParameters = {}}) {
   console.log("Tipo de datos: ",dateType)
 
   // Obtener los límites del mapa
@@ -302,9 +302,11 @@ export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1
   const windData = dataBuilder(data, nx, ny, dx, dy, gridLimits, dateType, hour_index);
 
   if (velocityLayer) {
+    velocityLayer.setOptions(windyParameters); // Actualizar los parámetros de la capa existente
     velocityLayer.setData(windData); // Actualizar los datos de la capa existente
   } else {
     // Crear una nueva capa si no existe
+    console.log(windyParameters);
     velocityLayer = L.velocityLayer({
       displayValues: true,
       displayOptions: {
@@ -313,13 +315,13 @@ export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1
       },
       // windy parameters
       data: windData,
-      maxVelocity: 10,
-      minVelocity: 0,
-      velocityScale: 0.005,
-      particleAge: 90,
-      lineWidth: 1,
-      particleMultiplier: 1 / 300,
-      frameRate: 15,
+      maxVelocity: windyParameters.maxVelocity || 10,
+      minVelocity: windyParameters.minVelocity || 0,
+      velocityScale: windyParameters.velocityScale || 0.005,
+      particleAge: windyParameters.particleAge || 90,
+      lineWidth: windyParameters.lineWidth || 1,
+      particleMultiplier: windyParameters.particleMultiplier || 1 / 300,
+      frameRate: windyParameters.frameRate || 15,
     });
 
     layerControl.addOverlay(velocityLayer, "API Wind Data"); // Añadir la capa
@@ -330,4 +332,8 @@ export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1
 
   // Retornar la capa para poder actualizarla
   return velocityLayer;
+}
+
+export function updateWindyParameters(velocityLayer = null, windyParameters) {
+  if (velocityLayer) velocityLayer.setOptions(windyParameters);
 }

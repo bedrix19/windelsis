@@ -23,7 +23,7 @@ body {
 #mapControls {
     position: absolute;
     bottom: 20px;
-    right: 20px;
+    right: 60px;
     z-index: 1000;
     display: flex;
     flex-direction: column;
@@ -34,7 +34,7 @@ body {
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
-#fetchWindDataButton {
+.button-style {
     padding: 10px 20px;
     background-color: #3388ff;
     color: white;
@@ -44,51 +44,11 @@ body {
     transition: background-color 0.2s;
 }
 
-#fetchWindDataButton:hover {
+.button-style:hover {
     background-color: #2a6fcc;
 }
 
-#pointDistance {
-    padding: 8px 12px;
-    background-color: #f8f9fa;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    color: #333;
-}
-
-#forecastDate {
-    padding: 8px 12px;
-    background-color: #f8f9fa;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    color: #333;
-}
-
-#forecastTime {
-    padding: 8px 12px;
-    background-color: #f8f9fa;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    color: #333;
-}
-
-#mapAdjustment {
-    padding: 8px 12px;
-    background-color: #f8f9fa;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    color: #333;
-}
-
-#forecastDateTime {
+.input-style {
     padding: 8px 12px;
     background-color: #f8f9fa;
     border: 1px solid #ddd;
