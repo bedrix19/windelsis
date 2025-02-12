@@ -44,9 +44,14 @@ L.CanvasLayer = (L.Layer ? L.Layer : L.Class).extend({
   //-------------------------------------------------------------
   _onLayerDidMove: function _onLayerDidMove() {
     var topLeft = this._map.containerPointToLayerPoint([0, 0]);
-
     L.DomUtil.setPosition(this._canvas, topLeft);
-    this.drawLayer();
+    
+    // this.drawLayer();
+    // Agregar un pequeño retardo para optimizar la carga progresiva
+    clearTimeout(this._redrawTimeout);
+    this._redrawTimeout = setTimeout(() => {
+        this.drawLayer();
+    }, 100);
   },
   //-------------------------------------------------------------
   getEvents: function getEvents() {
@@ -102,20 +107,21 @@ L.CanvasLayer = (L.Layer ? L.Layer : L.Class).extend({
   drawLayer: function drawLayer() {
     // -- todo make the viewInfo properties  flat objects.
     var size = this._map.getSize();
-
     var bounds = this._map.getBounds();
-
     var zoom = this._map.getZoom();
-
     var center = this._map.options.crs.project(this._map.getCenter());
-
     var corner = this._map.options.crs.project(this._map.containerPointToLatLng(this._map.getSize()));
+
+    // Extra margin to extent map limits, 20% for example
+    var marginFactor = 0.5;
+    var extendedBounds = bounds.pad(marginFactor);
 
     var del = this._delegate || this;
     del.onDrawLayer && del.onDrawLayer({
       layer: this,
       canvas: this._canvas,
       bounds: bounds,
+      // bounds: extendedBounds,
       size: size,
       zoom: zoom,
       center: center,
@@ -389,11 +395,46 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
   },
   _startWindy: function _startWindy() {
     var bounds = this._map.getBounds();
+    console.log("Bounds: ",bounds);
 
     var size = this._map.getSize(); // bounds, width, height, extent
+    console.log("Actual size: ",size);
 
+    //this._windy.start([[0, 0], [size.x, size.y]], size.x, size.y, [[bounds._southWest.lng, bounds._southWest.lat], [bounds._northEast.lng, bounds._northEast.lat]]);
 
-    this._windy.start([[0, 0], [size.x, size.y]], size.x, size.y, [[bounds._southWest.lng, bounds._southWest.lat], [bounds._northEast.lng, bounds._northEast.lat]]);
+    let la1 = this.options.data[0].header.la1;
+    let la2 = this.options.data[0].header.la2;
+    let lo1 = this.options.data[0].header.lo1;
+    let lo2 = this.options.data[0].header.lo2;
+
+    // Convertir el extent de datos a coordenadas de píxeles
+    var topLeft = this._map.latLngToContainerPoint(L.latLng(la1, lo1));
+    var bottomRight = this._map.latLngToContainerPoint(L.latLng(la2, lo2));
+    console.log("topLeft: ", topLeft, "|bottomRight: ", bottomRight);
+
+    // Calcular el tamaño necesario del canvas para cubrir todos los datos
+    var width = Math.abs(bottomRight.x - topLeft.x);
+    var height = Math.abs(bottomRight.y - topLeft.y);
+    console.log(width, height);
+
+    // Ajustar el canvas para que cubra todo el área de datos
+    this._canvasLayer._canvas.width = width;
+    this._canvasLayer._canvas.height = height;
+
+    // Posicionar el canvas correctamente
+    var offset = topLeft;
+    L.DomUtil.setPosition(this._canvasLayer._canvas, offset);
+
+    // Iniciar la animación usando el extent completo de datos
+    this._windy.start(
+      [[0, 0], [width, height]], 
+      width, 
+      height, 
+      [
+        [lo1, la2], // [lon, lat] del punto southWest
+        [lo2, la1]  // [lon, lat] del punto northEast
+      ]
+    );
   },
   _initWindy: function _initWindy(self) {
     // windy object, copy options
@@ -409,7 +450,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
 
     this.onDrawLayer();
 
-    this._map.on("dragstart", self._windy.stop);
+    //this._map.on("dragstart", self._windy.stop);
 
     this._map.on("dragend", self._clearAndRestart);
 
