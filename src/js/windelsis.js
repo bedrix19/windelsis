@@ -1,21 +1,288 @@
-// Ejemplo de resutlado de API Open-Meteo
-const exampleData = [
-  {
-    latitude: 42,
-    longitude: -8,
-    current_weather_units: {
-      temperature: "°C",
-      windspeed: "km/h",
-      windDirection: "°"
-    },
-    current_weather: {
-      temperature: 15,
-      windspeed: 10,
-      winddirection: 180,
-      is_day: 1
+export class MapManager {
+  constructor(mapId, options = {}) {
+    this.map = null;
+    this.velocityLayer = null;
+    this.layerControl = null;
+    this.isUpdating = false;
+    this.lastZoom = null;
+    this.updateTimeout = null;
+    this.currentGrid = {
+      bounds: null,
+      gridPoints: { latitudes: [], longitudes: [] },
+      dx: null,
+      dy: null,
+      windData: []
+    };    
+    this.options = {
+      center: options.center || [42.8, -8],
+      zoom: options.zoom || 8,
+      minZoom: options.minZoom || 3,
+      maxZoom: options.maxZoom || 18,
+      updateDelay: options.updateDelay || 500,
+      pointDistance:  options.pointDistance !== undefined
+                      ? options.pointDistance
+                      : this.getPointDistanceFromZoom(options.zoom),
+      mapAdjustment: options.mapAdjustment || 0,
+      windyParameters: options.windyParameters || this.getDefaultWindyParameters(),
+      dateType: options.dateType || 'current',
+      start_date: options.start_date || null,
+      end_date: options.end_date || null,
+      hour_index: options.hour_index || null
+    };
+    
+    this.initialize(mapId);
+  }
+
+  getDefaultWindyParameters() {
+    return {
+      maxVelocity: 10,
+      minVelocity: 0,
+      velocityScale: 0.005,
+      particleAge: 90,
+      lineWidth: 1,
+      particleMultiplier: 1/300,
+      frameRate: 15
+    };
+  }
+
+  getPointDistanceFromZoom(zoom) {
+    console.log("getPointDistanceFromZoom", zoom);
+    if (zoom <= 7) return 1;
+    else if (zoom > 7 && zoom <= 8) return 0.5;
+    else if (zoom > 8 && zoom <= 9) return 0.25;
+    else if (zoom > 9 && zoom <= 11) return 0.125;
+    else return 0.0625;
+  }
+
+  initialize(mapId) {
+    this.map = L.map(mapId, {
+        center: this.options.center,
+        zoom: this.options.zoom
+    });
+
+    // Add base layers
+    this.setupBaseLayers();
+    
+    this.currentGrid.bounds = getMapBoundsCoordinates(this.map);
+    
+    const { nx, ny, dx, dy } = calculateGridParameters(this.currentGrid.bounds, this.options.pointDistance);
+    this.currentGrid.dx = dx, this.currentGrid.dy = dy;
+
+    const { latitudes, longitudes } = generateGridCoordinates(this.map, this.currentGrid.bounds, nx, ny, dx, dy);
+    this.currentGrid.gridPoints = { latitudes, longitudes };
+
+    // Initialize event handlers
+    //this.initializeEventHandlers();
+  }
+
+  setupBaseLayers() {
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+    const Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+    const Esri_DarkGreyCanvas = L.tileLayer('http://{s}.sm.mapstack.stamen.com/toner-lite,$fff[difference],$fff[@23],$fff[hsl-saturation@20])/{z}/{x}/{y}.png');
+
+    this.layerControl = L.control.layers({
+      Satellite: Esri_WorldImagery,
+      "Grey Canvas": Esri_DarkGreyCanvas,
+      'OpenStreetMap': osm
+    }).addTo(this.map);
+
+    Esri_WorldImagery.addTo(this.map);
+  }
+
+  destroy(){
+    // Remover la capa de viento, si existe
+    if (this.velocityLayer) {
+      this.map.removeLayer(this.velocityLayer);
+      this.velocityLayer = null;
+    }
+  
+    // Remover el control de capas, si existe
+    if (this.layerControl) {
+      this.map.removeControl(this.layerControl);
+      this.layerControl = null;
+    }
+  
+    // Cancelar cualquier actualización pendiente
+    if (this.updateTimeout) {
+      clearTimeout(this.updateTimeout);
+      this.updateTimeout = null;
+    }
+  
+    // Quitar todos los eventos del mapa
+    if (this.map) {
+      this.map.off();
+      // Remover el mapa del DOM
+      this.map.remove();
+      this.map = null;
+    }
+
+    // Limpiar la información de la cuadrícula
+    this.currentGrid = null;
+  }
+
+  initializeEventHandlers() {
+    const debouncedUpdate = this.debounce(() => {
+        this.updateWindData();
+      }, this.options.updateDelay
+    );
+
+    // Zoom events with grid management
+    this.map.on('zoomend', () => {
+      const currentZoom = this.map.getZoom();
+      if (this.lastZoom !== currentZoom) {
+        this.handleZoomChange(currentZoom);
+        debouncedUpdate();
+      }
+      this.lastZoom = currentZoom;
+    });
+
+    // Pan events
+    this.map.on('moveend', () => {
+      if (!this.map.isZooming()) {
+        debouncedUpdate();
+      }
+    });
+  }
+
+  forceUpdate() {
+    this.updateWindData();
+  }
+
+  handleZoomChange(newZoom) {
+    // Adjust point distance based on zoom level
+    const baseDistance = 0.0625;
+    const zoomFactor = Math.pow(2, 8 - newZoom);
+    this.options.pointDistance = Math.max(baseDistance, baseDistance * zoomFactor);
+  }
+
+  debounce(func, wait) {
+      return () => {
+        if (this.updateTimeout) {
+          clearTimeout(this.updateTimeout);
+        }
+        this.updateTimeout = setTimeout(() => {
+          func.apply(this);
+        }, wait);
+      };
+  }
+
+  async updateWindData(dateOptions = {}) {
+    console.log("updateWindData", dateOptions);
+    if (this.isUpdating) return;
+    this.isUpdating = true;
+
+    try {
+      const newBounds = getMapBoundsCoordinates(this.map);
+      const oldGrid = this.currentGrid;
+      const pointDistance = this.options.pointDistance;
+
+      if (oldGrid.bounds.windData) {
+        //Generar nuevos puntos que no estaban en la cuadrícula anterior
+        const { latitudes, longitudes } = getNewGridPoints(oldGrid.bounds, newBounds, pointDistance, pointDistance);
+
+        if (latitudes.length === 0 && longitudes.length === 0) {
+          console.log("No hay nuevos puntos, evitando petición innecesaria.");
+          this.isUpdating = false;
+          return;
+        }
+
+        //Hacer petición solo para los nuevos puntos
+        const newData = await fetchWeatherData(latitudes, longitudes, latitudes.length, longitudes.length, this.options.dateType);
+
+        //Fusionar los datos nuevos con los existentes
+        this.currentGrid.windData = mergeWindData(this.currentGrid.windData, newData, oldGrid.bounds, newBounds);
+        this.currentGrid.bounds = newBounds;
+
+        //Actualizar capa sin reemplazarla completamente
+        if (this.velocityLayer) {
+          this.velocityLayer.setData(this.currentGrid.windData);
+        } else {
+          this.velocityLayer = L.velocityLayer({
+            displayValues: true,
+            data: this.currentGrid.windData,
+            maxVelocity: this.options.windyParameters.maxVelocity,
+          }).addTo(this.map);
+        }
+      }else{
+        console.log("Primera carga de datos");
+        this.velocityLayer = await fetchAndDrawWindData({
+          map: this.map,
+          layerControl: this.layerControl,
+          pointDistance: this.options.pointDistance,
+          velocityLayer: this.velocityLayer,
+          dateType: this.options.dateType,
+          start_date: this.options.start_date,
+          end_date: this.options.end_date,
+          hour_index: this.options.hour_index,
+          adjustment: this.options.mapAdjustment,
+          windyParameters: this.options.windyParameters,
+        });
+
+        this.currentGrid.bounds = newBounds;
+      }
+    } catch (error) {
+      console.error('Error updating wind data:', error);
+    } finally {
+      this.isUpdating = false;
     }
   }
-];
+
+  getMap() {
+    return this.map;
+  }
+
+  getVelocityLayer() {
+    return this.velocityLayer;
+  }
+
+  getCurrentGrid() {
+    return this.currentGrid;
+  }
+
+  async getCurrentData() {
+    return this.setDateType('current');
+  }
+
+  async getForecastData(start_date, end_date) {
+    return this.setDateType('forecast', { start_date, end_date });
+  }
+
+  async getHourlyForecast(start_date, end_date, hour_index) {
+    return this.setDateType('forecast_hourly', { 
+      start_date, 
+      end_date, 
+      hour_index 
+    });
+  }
+
+  setWindyParameters(parameters) {
+    this.options.windyParameters = { ...this.options.windyParameters, ...parameters };
+    if (this.velocityLayer) {
+        this.velocityLayer.setOptions(this.options.windyParameters);
+    }
+  }
+
+  setPointDistance(distance) {
+    this.options.pointDistance = distance;
+    this.forceUpdate();
+  }
+
+  setDateType(dateType, options = {}) {
+    this.options.dateType = dateType;
+    
+    if (dateType === 'forecast' || dateType === 'forecast_hourly') {
+      this.options.start_date = options.start_date || null;
+      this.options.end_date = options.end_date || null;
+      this.options.hour_index = options.hour_index || null;
+    } else {
+      this.options.start_date = null;
+      this.options.end_date = null;
+      this.options.hour_index = null;
+    }
+
+    return this.forceUpdate();
+  }
+}
 
 // Convertir dirección del viento a componentes u y v
 function convertWindDirection(speed, direction) {
@@ -267,6 +534,36 @@ function generateGridCoordinates(map, bounds, nx, ny, dx, dy) {
   for (let j=0;j<nx;j++) longitudes.push(bounds.northWest.lng + j * dx);
 
   return { latitudes, longitudes };
+}
+
+// Primera implementación, pero solo sirve para hallar '4 rectas', no para el resto
+function getNewGridPoints(oldBounds, newBounds, dx, dy) {
+  const newPoints = {
+      latitudes: [],
+      longitudes: []
+  };
+
+  // Si hay nuevos puntos al norte
+  for (let lat = oldBounds.northWest.lat + dy; lat <= newBounds.northWest.lat; lat += dy) {
+      newPoints.latitudes.push(lat);
+  }
+
+  // Si hay nuevos puntos al sur
+  for (let lat = oldBounds.southWest.lat - dy; lat >= newBounds.southWest.lat; lat -= dy) {
+      newPoints.latitudes.push(lat);
+  }
+
+  // Si hay nuevos puntos al este
+  for (let lon = oldBounds.northEast.lng + dx; lon <= newBounds.northEast.lng; lon += dx) {
+      newPoints.longitudes.push(lon);
+  }
+
+  // Si hay nuevos puntos al oeste
+  for (let lon = oldBounds.northWest.lng - dx; lon >= newBounds.northWest.lng; lon -= dx) {
+      newPoints.longitudes.push(lon);
+  }
+
+  return newPoints;
 }
 
 export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1, velocityLayer = null, dateType, start_date = null, end_date = null, hour_index = null, adjustment = 0, windyParameters = {}}) {

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de España con Leaflet</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="../src/css/windelsis.css" />
+</head>
+<body>
+    <div id="mapControls">
+        <label for="spacing">Distancia entre puntos: </label>
+        <select id="spacing" class="input-style" onchange="updateMarkers()">
+            <option value="1">1°</option>
+            <option value="0.5">0.5°</option>
+            <option value="0.25">0.25°</option>
+            <option value="0.125">0.125°</option>
+            <option value="0.0625">0.0625°</option>
+        </select>
+    </div>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map').setView([40.4637, -3.7492], 7); // España
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        map.on('zoomend', function() {
+            console.log('Nivel de zoom actual: ' + map.getZoom());
+        });
+
+        var markersLayer = L.layerGroup().addTo(map);
+
+        function addMarkers(spacing) {
+            markersLayer.clearLayers();
+            let la1, la2, lo1, lo2;
+            if(spacing == 1 || spacing == 0.5) {
+                la1 = 36;
+                la2 = 44;
+                lo1 = -10;
+                lo2 = 4;
+            } else if (spacing == 0.25) {
+                la1 = 39;
+                la2 = 42;
+                lo1 = -6;
+                lo2 = -1.25;
+            } else if (spacing == 0.125 || spacing == 0.0625) {
+                la1 = 40;
+                la2 = 40.9;
+                lo1 = -4.5;
+                lo2 = -3;
+            }
+            for (var lat = la1; lat <= la2; lat += spacing) {
+                for (var lon = lo1; lon <= lo2; lon += spacing) {
+                    L.marker([lat, lon]).addTo(markersLayer)
+                        .bindPopup(`Lat: ${lat}, Lon: ${lon}`);
+                }
+            }
+        }
+
+        function updateMarkers() {
+            var spacing = parseFloat(document.getElementById('spacing').value);
+            addMarkers(spacing);
+        }
+
+        addMarkers(1); // Valor por defecto
+    </script>
+</body>
+</html>

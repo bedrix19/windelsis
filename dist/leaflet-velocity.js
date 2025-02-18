@@ -52,7 +52,8 @@ L.CanvasLayer = (L.Layer ? L.Layer : L.Class).extend({
   getEvents: function getEvents() {
     var events = {
       resize: this._onLayerDidResize,
-      moveend: this._onLayerDidMove
+      moveend: this._onLayerDidMove,
+      // drag: this._onLayerDidMove
     };
 
     if (this._map.options.zoomAnimation && L.Browser.any3d) {
@@ -400,6 +401,18 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
     //this._windy.start([[0, 0], [size.x, size.y]], size.x, size.y, [[lo1, lo2], [lo2, la1]]);
     this._windy.start([[0, 0], [size.x, size.y]], size.x, size.y, [[bounds._southWest.lng, bounds._southWest.lat], [bounds._northEast.lng, bounds._northEast.lat]]);
   },
+
+  // Nueva función para actualizar la animación durante el arrastre  
+  _updateWindDuringDrag: function() {
+    if (this._dragTimer) clearTimeout(this._dragTimer);
+    // Se usa un debounce de 200ms para no saturar el proceso durante arrastres muy rápidos.
+    this._dragTimer = setTimeout(() => {
+      let aux = this._map.getBounds();
+      console.log(aux._southWest);
+      this._clearAndRestart();
+    }, 200);
+  },
+
   _initWindy: function _initWindy(self) {
     // windy object, copy options
     var options = Object.assign({
@@ -417,11 +430,10 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
     //this._map.on("dragstart", self._windy.stop);
 
     // this._map.on("dragend", self._clearAndRestart);
-
-    // this._map.on("zoomstart", self._windy.stop);
     console.log("zoom activated");
-    this._map.on('drag', (event) => console.log("map_zoom_Event"));
-    this._map.on('drag', (event) => self._startWindy());
+    this._map.on('drag', (event) => self._updateWindDuringDrag());
+
+    this._map.on("zoomstart", self._windy.stop);
     this._map.on("zoomend", self._clearAndRestart);
 
     this._map.on("resize", self._clearWind);
@@ -442,7 +454,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
     }
   },
   _clearAndRestart: function _clearAndRestart() {
-    console.log("cleaqr and restart");
+    console.log("clear and restart");
     if (this._context) this._context.clearRect(0, 0, 3000, 3000);
     if (this._windy) this._startWindy();
   },

@@ -1,4 +1,4 @@
-import { fetchAndDrawWindData } from "../src/js/windelsis.js";
+import { MapManager } from "../src/js/windelsis.js";
 
 function initDemoMap() {
     var Esri_WorldImagery = L.tileLayer(
@@ -32,7 +32,7 @@ function initDemoMap() {
 
     var layerControl = L.control.layers(baseLayers);
     layerControl.addTo(map);
-    map.setView([42.9525, -7.7746], 8);
+    map.setView([40.05, -4.16], 7);
   
     // pop up with coordinates on click
     map.on("click", function(e) {
@@ -46,10 +46,35 @@ function initDemoMap() {
 }
 
 // Inicializar el mapa de demostración
-var mapStuff = initDemoMap();
-var map = mapStuff.map;
-var layerControl = mapStuff.layerControl;
-var velocityLayer = null;
+let mapManager = new MapManager('map', {
+  center: [40.05, -4.16],
+  zoom: 7,
+  updateDelay: 500,
+  windyParameters: {
+      maxVelocity: 15,
+      velocityScale: 0.008
+  }
+});
+
+await mapManager.getCurrentData();
+
+document.getElementById('testMapManager').addEventListener('click', async () => {
+  //get map data to destroy and recreate the object
+  let currentCenter = mapManager.map.getCenter();
+  let currentZoom = mapManager.map.getZoom();
+  mapManager.destroy();
+  mapManager = new MapManager('map', {
+    center: currentCenter,   
+    zoom: currentZoom,
+    updateDelay: 500,
+    windyParameters: {
+        maxVelocity: 15,
+        velocityScale: 0.008
+    }
+  });
+
+  await mapManager.getCurrentData();
+});
 
 document.getElementById('fetchWindDataButton').addEventListener('click', () => {
     const pointDistance = parseFloat(document.getElementById('pointDistance').value) || 1;
@@ -70,27 +95,12 @@ document.getElementById('fetchWindDataButton').addEventListener('click', () => {
     let dateType;
     if(forecastTime && forecastDate) dateType = 'forecast_hourly';
     else if (forecastDate) dateType = 'forecast';
-    fetchAndDrawWindData({
-      map:map,
-      layerControl:layerControl,
-      pointDistance:pointDistance,
-      velocityLayer:velocityLayer,
-      dateType:dateType || 'current',
-      start_date:forecastDate,
-      end_date:forecastDate,
-      hour_index:forecastTime,
-      adjustment:adjustment || 0,
-      windyParameters:windyParameters
-    }).then(newLayer => {
-        velocityLayer = newLayer;
-    });
 });
 
 document.getElementById('updateWindyParams').addEventListener('click', () => {
   console.log('Updating windy parameters');
-  if (velocityLayer) velocityLayer.setOptions({
+  mapManager.setWindyParameters({
     maxVelocity: parseFloat(document.getElementById('maxVelocity').value),
-    minVelocity: parseFloat(document.getElementById('minVelocity').value),
     velocityScale: parseFloat(document.getElementById('velocityScale').value),
     particleAge: parseInt(document.getElementById('particleAge').value),
     lineWidth: parseFloat(document.getElementById('lineWidth').value),
