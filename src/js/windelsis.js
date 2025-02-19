@@ -11,6 +11,8 @@ export class MapManager {
       gridPoints: { latitudes: [], longitudes: [] },
       dx: null,
       dy: null,
+      nx: null,
+      ny: null,
       windData: []
     };    
     this.options = {
@@ -50,7 +52,7 @@ export class MapManager {
     if (zoom <= 7) return 1;
     else if (zoom > 7 && zoom <= 8) return 0.5;
     else if (zoom > 8 && zoom <= 9) return 0.25;
-    else if (zoom > 9 && zoom <= 11) return 0.125;
+    else if (zoom > 9 && zoom < 11) return 0.125;
     else return 0.0625;
   }
 
@@ -63,13 +65,9 @@ export class MapManager {
     // Add base layers
     this.setupBaseLayers();
     
-    this.currentGrid.bounds = getMapBoundsCoordinates(this.map);
-    
-    const { nx, ny, dx, dy } = calculateGridParameters(this.currentGrid.bounds, this.options.pointDistance);
-    this.currentGrid.dx = dx, this.currentGrid.dy = dy;
-
-    const { latitudes, longitudes } = generateGridCoordinates(this.map, this.currentGrid.bounds, nx, ny, dx, dy);
-    this.currentGrid.gridPoints = { latitudes, longitudes };
+    // Setup grid parameters
+    this.currentGrid = gridBuilder.call(this, this.options.pointDistance, this.options.mapAdjustment);
+    console.log("currentGrid", this.currentGrid);
 
     // Initialize event handlers
     //this.initializeEventHandlers();
@@ -79,14 +77,19 @@ export class MapManager {
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     const Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
     const Esri_DarkGreyCanvas = L.tileLayer('http://{s}.sm.mapstack.stamen.com/toner-lite,$fff[difference],$fff[@23],$fff[hsl-saturation@20])/{z}/{x}/{y}.png');
+    const cartoDbDark = L.tileLayer('http://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png')
 
     this.layerControl = L.control.layers({
       Satellite: Esri_WorldImagery,
-      "Grey Canvas": Esri_DarkGreyCanvas,
-      'OpenStreetMap': osm
+      'Grey Canvas': Esri_DarkGreyCanvas,
+      'OpenStreetMap': osm,
+      'Carto Db Dark': cartoDbDark,
+      'cartoDbLight': L.tileLayer('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'),
+      'googleSatellite': L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'),
+      'pnoa2022': L.tileLayer.wms('https://www.ign.es/wms/pnoa-historico'),
     }).addTo(this.map);
 
-    Esri_WorldImagery.addTo(this.map);
+    cartoDbDark.addTo(this.map);
   }
 
   destroy(){
@@ -172,13 +175,13 @@ export class MapManager {
     this.isUpdating = true;
 
     try {
-      const newBounds = getMapBoundsCoordinates(this.map);
+      const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
       const oldGrid = this.currentGrid;
       const pointDistance = this.options.pointDistance;
 
       if (oldGrid.bounds.windData) {
         //Generar nuevos puntos que no estaban en la cuadrícula anterior
-        const { latitudes, longitudes } = getNewGridPoints(oldGrid.bounds, newBounds, pointDistance, pointDistance);
+        const { latitudes, longitudes } = getNewGridPoints(oldGrid.bounds, mapBounds, pointDistance, pointDistance);
 
         if (latitudes.length === 0 && longitudes.length === 0) {
           console.log("No hay nuevos puntos, evitando petición innecesaria.");
@@ -190,8 +193,8 @@ export class MapManager {
         const newData = await fetchWeatherData(latitudes, longitudes, latitudes.length, longitudes.length, this.options.dateType);
 
         //Fusionar los datos nuevos con los existentes
-        this.currentGrid.windData = mergeWindData(this.currentGrid.windData, newData, oldGrid.bounds, newBounds);
-        this.currentGrid.bounds = newBounds;
+        this.currentGrid.windData = mergeWindData(this.currentGrid.windData, newData, oldGrid.bounds, mapBounds);
+        this.currentGrid.bounds = mapBounds;
 
         //Actualizar capa sin reemplazarla completamente
         if (this.velocityLayer) {
@@ -205,20 +208,15 @@ export class MapManager {
         }
       }else{
         console.log("Primera carga de datos");
-        this.velocityLayer = await fetchAndDrawWindData({
+        this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options.dateType, this.options.start_date, this.options.end_date);
+
+        this.velocityLayer = DrawWindData({
           map: this.map,
           layerControl: this.layerControl,
-          pointDistance: this.options.pointDistance,
           velocityLayer: this.velocityLayer,
-          dateType: this.options.dateType,
-          start_date: this.options.start_date,
-          end_date: this.options.end_date,
-          hour_index: this.options.hour_index,
-          adjustment: this.options.mapAdjustment,
           windyParameters: this.options.windyParameters,
+          windyData: windyDataBuilder(this.currentGrid.windData, this.currentGrid.nx, this.currentGrid.ny, this.currentGrid.dx, this.currentGrid.dy, this.currentGrid.bounds, this.options.dateType, this.options.hour_index)
         });
-
-        this.currentGrid.bounds = newBounds;
       }
     } catch (error) {
       console.error('Error updating wind data:', error);
@@ -294,11 +292,26 @@ function convertWindDirection(speed, direction) {
   return { u, v };
 }
 
+function getBoundsAtZoom(map, zoomLevel) {
+  console.log("getBoundsAtZoom", zoomLevel);
+
+  const center = map.getCenter();
+  const bounds = map.getPixelBounds(center, zoomLevel);
+
+  // Convertir los límites a coordenadas geográficas
+  const southWest = map.unproject(bounds.getBottomLeft(), zoomLevel);//L.marker(southWest).addTo(map);
+  const northEast = map.unproject(bounds.getTopRight(), zoomLevel);//L.marker(northEast).addTo(map);
+  
+  return L.latLngBounds(southWest, northEast);
+}
+
 // Obtener las coordenadas de los límites del mapa
 function getMapBoundsCoordinates(map, adjustment = 0) {
-  const bounds = map.getBounds();
-  const southWest = bounds.getSouthWest();
-  const northEast = bounds.getNorthEast();
+  const bounds =  map.getZoom() >= 11
+                  ? getBoundsAtZoom(map, 11)
+                  : map.getBounds();
+  const southWest = bounds.getSouthWest();//L.marker(southWest).addTo(map);
+  const northEast = bounds.getNorthEast();//L.marker(northEast).addTo(map);
   const northWest = L.latLng(northEast.lat, southWest.lng);
   const southEast = L.latLng(southWest.lat, northEast.lng);
 
@@ -331,7 +344,7 @@ function getMapBoundsCoordinates(map, adjustment = 0) {
 }
 
 // Logica para construir el json para usar con leaflet-velocity
-function dataBuilder(data, nx, ny, dx, dy, boundaries, dateType = 'current', hour_index) {
+function windyDataBuilder(data, nx, ny, dx, dy, boundaries, dateType = 'current', hour_index) {
   var u_component = [], v_component = [];
   if(dateType == 'forecast_hourly') {
     for (let i = 0; i < data.length; i++) { // data.length should be equal to nx * ny
@@ -424,8 +437,12 @@ function dataBuilder(data, nx, ny, dx, dy, boundaries, dateType = 'current', hou
 /**
  * Los puntos de latitud de la API son multiplos de .0625 (Si mandamos uno distinto los redondea)
  * Se actualizan cada hora y cuarto
+ * latitudes, longitudes, nx, ny
  */
-async function fetchWeatherData(latitudes, longitudes, nx, ny, dateType = 'current', start_date = null, end_date = null) {
+async function fetchWeatherData(grid, dateType = 'current', start_date = null, end_date = null) {
+  const { latitudes, longitudes } = grid.gridPoints;
+  const nx = grid.nx, ny = grid.ny;
+
   const fetchPromises = []; // Array to store all fetch promises
   const orderedResults = Array(ny).fill().map(() => Array(nx).fill(null)); // creates 2D array to store data
   
@@ -536,8 +553,38 @@ function generateGridCoordinates(map, bounds, nx, ny, dx, dy) {
   return { latitudes, longitudes };
 }
 
+function gridBuilder(pointDistance, adjustment) {
+  // Obtener los límites del mapa
+  const gridLimits = getMapBoundsCoordinates(this.map, adjustment);
+
+  console.log("northWest", gridLimits.northWest);
+  console.log("northEast", gridLimits.northEast);
+  console.log("southWest", gridLimits.southWest);
+  console.log("southEast", gridLimits.southEast);
+
+  // Datos para la cuadricula
+  const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
+
+  console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
+
+  // Generar las coordenadas de los puntos
+  const { latitudes, longitudes } = generateGridCoordinates(this.map, gridLimits, nx, ny, dx, dy);
+
+  return {
+    bounds: gridLimits,
+    gridPoints: { latitudes: latitudes, longitudes: longitudes },
+    dx: dx,
+    dy: dy,
+    nx: nx,
+    ny: ny,
+  }
+}
+
 // Primera implementación, pero solo sirve para hallar '4 rectas', no para el resto
 function getNewGridPoints(oldBounds, newBounds, dx, dy) {
+  // Calcular los nuevos extremos en base a newBounds pero que sean multiplos de dx y dy
+  let newNorthWest, newNorthEast, newSouthWest, newSouthEast;
+
   const newPoints = {
       latitudes: [],
       longitudes: []
@@ -566,44 +613,12 @@ function getNewGridPoints(oldBounds, newBounds, dx, dy) {
   return newPoints;
 }
 
-export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1, velocityLayer = null, dateType, start_date = null, end_date = null, hour_index = null, adjustment = 0, windyParameters = {}}) {
-  console.log("Tipo de datos: ",dateType)
-
-  // Obtener los límites del mapa
-  var gridLimits = getMapBoundsCoordinates(map, adjustment);
-
-  console.log("northWest", gridLimits.northWest);
-  console.log("northEast", gridLimits.northEast);
-  console.log("southWest", gridLimits.southWest);
-  console.log("southEast", gridLimits.southEast);
-
-  // Datos para la cuadricula
-  const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
-
-  console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
-
-  var la1 = gridLimits.northEast.lat, la2 = gridLimits.southEast.lat;
-  var lo1 = gridLimits.northWest.lng, lo2 = gridLimits.southWest.lng;
-  console.log("Primer punto", lo1, la1);
-  console.log("Segundo punto", lo2, la2);
-
-  // Generar las coordenadas de los puntos
-  const { latitudes, longitudes } = generateGridCoordinates(map, gridLimits, nx, ny, dx, dy);
-
-  // Obtener los datos del API
-  const data = await fetchWeatherData(latitudes, longitudes, nx, ny, dateType, start_date, end_date);
-  console.log("...", ...data);
-  console.log("data.length", data.length);
-
-  // Construir los datos para leaflet-velocity
-  const windData = dataBuilder(data, nx, ny, dx, dy, gridLimits, dateType, hour_index);
-
+function DrawWindData({ map, layerControl, velocityLayer = null, windyData, windyParameters = {} }) {
   if (velocityLayer) {
     velocityLayer.setOptions(windyParameters); // Actualizar los parámetros de la capa existente
-    velocityLayer.setData(windData); // Actualizar los datos de la capa existente
+    velocityLayer.setData(windyData); // Actualizar los datos de la capa existente
   } else {
     // Crear una nueva capa si no existe
-    console.log(windyParameters);
     velocityLayer = L.velocityLayer({
       displayValues: true,
       displayOptions: {
@@ -611,7 +626,7 @@ export async function fetchAndDrawWindData({map, layerControl, pointDistance = 1
         emptyString: "No velocity data"
       },
       // windy parameters
-      data: windData,
+      data: windyData,
       maxVelocity: windyParameters.maxVelocity || 10,
       minVelocity: windyParameters.minVelocity || 0,
       velocityScale: windyParameters.velocityScale || 0.005,

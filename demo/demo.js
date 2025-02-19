@@ -47,8 +47,8 @@ function initDemoMap() {
 
 // Inicializar el mapa de demostración
 let mapManager = new MapManager('map', {
-  center: [40.05, -4.16],
-  zoom: 7,
+  center: [40.4167, -3.7033],
+  zoom: 10,
   updateDelay: 500,
   windyParameters: {
       maxVelocity: 15,
@@ -56,7 +56,7 @@ let mapManager = new MapManager('map', {
   }
 });
 
-await mapManager.getCurrentData();
+// await mapManager.getCurrentData();
 
 document.getElementById('testMapManager').addEventListener('click', async () => {
   //get map data to destroy and recreate the object
@@ -72,6 +72,10 @@ document.getElementById('testMapManager').addEventListener('click', async () => 
         velocityScale: 0.008
     }
   });
+
+  let dateType;
+  if(forecastTime && forecastDate) dateType = 'forecast_hourly';
+  else if (forecastDate) dateType = 'forecast';
 
   await mapManager.getCurrentData();
 });
