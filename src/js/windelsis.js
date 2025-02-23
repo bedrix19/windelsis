@@ -133,7 +133,7 @@ export class MapManager {
     this.map.on('zoomend', () => {
       const currentZoom = this.map.getZoom();
       if (this.lastZoom !== currentZoom) {
-        this.handleZoomChange(currentZoom);
+        this.pointDistance = this.getPointDistanceFromZoom(currentZoom);
         debouncedUpdate();
       }
       this.lastZoom = currentZoom;
@@ -149,13 +149,6 @@ export class MapManager {
 
   forceUpdate() {
     this.updateWindData();
-  }
-
-  handleZoomChange(newZoom) {
-    // Adjust point distance based on zoom level
-    const baseDistance = 0.0625;
-    const zoomFactor = Math.pow(2, 8 - newZoom);
-    this.options.pointDistance = Math.max(baseDistance, baseDistance * zoomFactor);
   }
 
   debounce(func, wait) {
@@ -175,11 +168,23 @@ export class MapManager {
     this.isUpdating = true;
 
     try {
-      const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
+      //const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
       const oldGrid = this.currentGrid;
-      const pointDistance = this.options.pointDistance;
+      //const pointDistance = this.options.pointDistance;
 
-      if (oldGrid.bounds.windData) {
+      if (oldGrid.windData) {
+        this.currentGrid = gridBuilder.call(this, this.options.pointDistance, this.options.mapAdjustment);
+        console.log("currentGrid", this.currentGrid);
+        this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options.dateType, this.options.start_date, this.options.end_date);
+
+        this.velocityLayer = DrawWindData({
+          map: this.map,
+          layerControl: this.layerControl,
+          velocityLayer: this.velocityLayer,
+          windyParameters: this.options.windyParameters,
+          windyData: windyDataBuilder(this.currentGrid.windData, this.currentGrid.nx, this.currentGrid.ny, this.currentGrid.dx, this.currentGrid.dy, this.currentGrid.bounds, this.options.dateType, this.options.hour_index)
+        });
+        /*
         //Generar nuevos puntos que no estaban en la cuadrícula anterior
         const { latitudes, longitudes } = getNewGridPoints(oldGrid.bounds, mapBounds, pointDistance, pointDistance);
 
@@ -206,6 +211,7 @@ export class MapManager {
             maxVelocity: this.options.windyParameters.maxVelocity,
           }).addTo(this.map);
         }
+        */
       }else{
         console.log("Primera carga de datos");
         this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options.dateType, this.options.start_date, this.options.end_date);
@@ -293,8 +299,6 @@ function convertWindDirection(speed, direction) {
 }
 
 function getBoundsAtZoom(map, zoomLevel) {
-  console.log("getBoundsAtZoom", zoomLevel);
-
   const center = map.getCenter();
   const bounds = map.getPixelBounds(center, zoomLevel);
 
@@ -430,7 +434,7 @@ function windyDataBuilder(data, nx, ny, dx, dy, boundaries, dateType = 'current'
     }
   ];
 
-  console.log("windData", JSON.stringify(windData, null, 2));
+  console.log(windData); //console.log("windData", JSON.stringify(windData, null, 2));
   return windData;
 }
 
@@ -526,7 +530,7 @@ function calculateGridParameters(bounds, pointDistance=0.0625) {
   let auxDistance = 0;
   for(let i = 0; i < 16; i++) {
     if(latRange <= 0.0625 * i || lonRange <= 0.0625 * i) {
-      auxDistance = 0.0625 * i;
+      // auxDistance = 0.0625 * i;
       console.log("Se ajusta a", auxDistance * i);
       break;
     }
