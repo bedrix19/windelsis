@@ -17,6 +17,8 @@
             <option value="0.125">0.125°</option>
             <option value="0.0625">0.0625°</option>
         </select>
+        <br><label for="zoomLevel">Nivel de zoom: </label>
+        <input type="text" id="zoomLevel" class="input-style" readonly value="7">
     </div>
     <div id="map"></div>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -28,7 +30,8 @@
         }).addTo(map);
 
         map.on('zoomend', function() {
-            console.log('Nivel de zoom actual: ' + map.getZoom());
+            const currentZoom = map.getZoom();
+            document.getElementById('zoomLevel').value = currentZoom;
         });
 
         var markersLayer = L.layerGroup().addTo(map);

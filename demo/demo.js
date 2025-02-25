@@ -45,10 +45,16 @@ function initDemoMap() {
     };
 }
 
+/**
+ * Madrid: 40.4167, -3.7033
+ * Coruña: 43.3623, -8.4104
+ * Vigo: 42.2406, -8.7207
+ * SdC: 42.8769, -8.5442
+ */
 // Inicializar el mapa de demostración
 let mapManager = new MapManager('map', {
-  center: [40.4167, -3.7033],
-  zoom: 10,
+  center: [42.8769, -8.5442],
+  zoom: 12,
   updateDelay: 500,
   windyParameters: {
       maxVelocity: 15,

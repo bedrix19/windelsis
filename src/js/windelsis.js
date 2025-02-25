@@ -8,12 +8,11 @@ export class MapManager {
     this.updateTimeout = null;
     this.currentGrid = {
       bounds: null,
-      gridPoints: { latitudes: [], longitudes: [] },
+      grid: [],
       dx: null,
       dy: null,
       nx: null,
-      ny: null,
-      windData: []
+      ny: null
     };    
     this.options = {
       center: options.center || [42.8, -8],
@@ -66,7 +65,7 @@ export class MapManager {
     this.setupBaseLayers();
     
     // Setup grid parameters
-    this.currentGrid = gridBuilder.call(this, this.options.pointDistance, this.options.mapAdjustment);
+    this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
     console.log("currentGrid", this.currentGrid);
 
     // Initialize event handlers
@@ -173,9 +172,9 @@ export class MapManager {
       //const pointDistance = this.options.pointDistance;
 
       if (oldGrid.windData) {
-        this.currentGrid = gridBuilder.call(this, this.options.pointDistance, this.options.mapAdjustment);
+        this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
         console.log("currentGrid", this.currentGrid);
-        this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options.dateType, this.options.start_date, this.options.end_date);
+        this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options);
 
         this.velocityLayer = DrawWindData({
           map: this.map,
@@ -214,14 +213,14 @@ export class MapManager {
         */
       }else{
         console.log("Primera carga de datos");
-        this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options.dateType, this.options.start_date, this.options.end_date);
+        this.currentGrid.grid = await fetchWeatherData(this.currentGrid, this.options);
 
         this.velocityLayer = DrawWindData({
           map: this.map,
           layerControl: this.layerControl,
           velocityLayer: this.velocityLayer,
           windyParameters: this.options.windyParameters,
-          windyData: windyDataBuilder(this.currentGrid.windData, this.currentGrid.nx, this.currentGrid.ny, this.currentGrid.dx, this.currentGrid.dy, this.currentGrid.bounds, this.options.dateType, this.options.hour_index)
+          windyData: windyDataBuilder(this.currentGrid, this.options)
         });
       }
     } catch (error) {
@@ -288,6 +287,62 @@ export class MapManager {
   }
 }
 
+class GridPoint {
+  constructor(latitude, longitude) {
+    this.latitude = latitude;
+    this.longitude = longitude;
+    this.weatherData = {
+      temperature: null,
+      wind: {
+        speed: null,
+        direction: null,
+        units: {
+          speed: null,
+          temperature: null
+        }
+      },
+      timestamp: null,
+      rawData: null,
+    };
+  }
+
+  setWeatherData(data) {
+    this.weatherData = data;
+  }
+
+  getWindComponents() {
+    if (!this.weatherData?.wind) return null;
+
+    return convertWindDirection(
+      this.weatherData.wind.speed,
+      this.weatherData.wind.direction
+    );
+  }
+
+  convertSpeed(speed, unit) {
+    return unit === 'km/h' ? speed * 0.27778 : speed;
+  }
+
+  getTemperature() {
+    return this.weatherData.temperature;
+  }
+
+  getWindSpeed() {
+    return this.weatherData.wind?.speed;
+  }
+
+  getWindDirection() {
+    return this.weatherData.wind?.direction;
+  }
+
+  // Method to check if data is stale (older than 1 hour)
+  isStale() {
+    if (!this.weatherData.timestamp) return true;
+    const oneHourAgo = new Date(Date.now() - 3600000);
+    return this.weatherData.timestamp < oneHourAgo;
+  }
+}
+
 // Convertir dirección del viento a componentes u y v
 function convertWindDirection(speed, direction) {
   const rad = direction * (Math.PI / 180);
@@ -348,7 +403,11 @@ function getMapBoundsCoordinates(map, adjustment = 0) {
 }
 
 // Logica para construir el json para usar con leaflet-velocity
-function windyDataBuilder(data, nx, ny, dx, dy, boundaries, dateType = 'current', hour_index) {
+function windyDataBuilder(currentGrid, options) {
+  const { data, nx, ny, dx, dy, boundaries } = currentGrid;
+  const dateType = options.dateType;
+  const hour_index = options.hour_index;
+
   var u_component = [], v_component = [];
   if(dateType == 'forecast_hourly') {
     for (let i = 0; i < data.length; i++) { // data.length should be equal to nx * ny
@@ -438,70 +497,84 @@ function windyDataBuilder(data, nx, ny, dx, dy, boundaries, dateType = 'current'
   return windData;
 }
 
+function setDataFromOpenMeteo(results, points, nx){
+    // Update points with weather data
+    results.forEach(({data, rowIndex}) => {
+      const rowPoints = points.slice(rowIndex * nx, (rowIndex + 1) * nx);
+      rowPoints.forEach(point => {
+        point.setWeatherData({
+          temperature: data.current?.temperature_2m,
+          wind: {
+            speed: data.current?.wind_speed_10m,
+            direction: data.current?.wind_direction_10m,
+            units: {
+              speed: data.current_units?.wind_speed_10m,
+              temperature: data.current_units?.temperature_2m
+            }
+          },
+          timestamp: new Date(data.current?.time),
+          rawData: data // Keep raw data for debugging
+        });
+      });
+    });
+    console.log("Datos actualizados de OpenMeteo", points);
+}
+
 /**
- * Los puntos de latitud de la API son multiplos de .0625 (Si mandamos uno distinto los redondea)
+ * Los puntos de coordenadas de Open-Meteo son multiplos de .0625 (Si mandamos uno distinto los redondea)
  * Se actualizan cada hora y cuarto
  * latitudes, longitudes, nx, ny
  */
-async function fetchWeatherData(grid, dateType = 'current', start_date = null, end_date = null) {
-  const { latitudes, longitudes } = grid.gridPoints;
-  const nx = grid.nx, ny = grid.ny;
-
+async function fetchWeatherData(grid, options, API = 'OpenMeteo') {
+  const { points, nx, ny } = grid;
   const fetchPromises = []; // Array to store all fetch promises
-  const orderedResults = Array(ny).fill().map(() => Array(nx).fill(null)); // creates 2D array to store data
   
-  for (let rowIndex = 0; rowIndex < latitudes.length; rowIndex++) {
-    const lat = latitudes[rowIndex];
-    // Para esta fila, repetir la misma latitud para cada longitud
-    const latParams = new Array(nx).fill(lat).join(',');
-    // Obtener las longitudes para esta fila
-    const lonParams = longitudes.join(',');
+  // Group points into rows for batch fetching
+  for (let i = 0; i < ny; i++) {
+    const rowPoints = points.slice(i * nx, (i + 1) * nx);
+    const latParams = rowPoints[0].latitude.toString();
+    const lonParams = rowPoints.map(p => p.longitude).join(',');
     
-    let url;
-    switch(dateType) {
-      case 'current':
-        url = `https://api.open-meteo.com/v1/forecast?latitude=${latParams}&longitude=${lonParams}&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
-        break;
-      case 'forecast':
-        url = `https://api.open-meteo.com/v1/forecast?latitude=${latParams}&longitude=${lonParams}&start_date=${start_date}&end_date=${end_date}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=ms&timezone=auto`;
-        break;
-      case 'forecast_hourly':
-        url = `https://api.open-meteo.com/v1/forecast?latitude=${latParams}&longitude=${lonParams}&start_date=${start_date}&end_date=${end_date}&hourly=temperature_2m,is_day,precipitation,rain,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto`;
-        break;
-      default:
-        console.error("Unrecognized data type");
-    }
-
-    // Store promise with its row index for ordering later
+    let url = buildWeatherURL(API, options.dateType, latParams, lonParams, options.start_date, options.end_date);
+    
     fetchPromises.push(
       fetch(url)
         .then(response => {
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           return response.json();
         })
-        .then(data => ({data, rowIndex}))
+        .then(data => ({data, rowIndex: i}))
     );
   }
 
   try {
-    // Wait for all fetches to complete
     const results = await Promise.all(fetchPromises);
     
-    // Order results into grid
-    results.forEach(({data, rowIndex}) => {
-      data.forEach((point, colIndex) => {
-        orderedResults[rowIndex][colIndex] = point;
-      });
-    });
+    if(API == 'OpenMeteo') setDataFromOpenMeteo(results, points, nx);
+    else if(API == 'MeteoSIX') setDataFromMeteoSIX(results, points, nx);
 
-    // Convert 2D array to 1D array ordered from NW to SE
-    const finalResults = orderedResults.flat();
-    return finalResults;
-    
+    return points;
   } catch (error) {
     console.error('Fetching weather data failed:', error);
     throw error;
   }
+}
+
+// Helper function to build weather API URL
+function buildWeatherURL(API, dateType, lat, lon, start_date, end_date) {
+  const baseUrl = 'https://api.open-meteo.com/v1/forecast';
+  if(API == 'OpenMeteo')
+    switch(dateType) {
+      case 'current':
+        return `${baseUrl}?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+      case 'forecast':
+        return `${baseUrl}?latitude=${lat}&longitude=${lon}&start_date=${start_date}&end_date=${end_date}&daily=wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=ms`;
+      case 'forecast_hourly':
+        return `${baseUrl}?latitude=${lat}&longitude=${lon}&start_date=${start_date}&end_date=${end_date}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+      default:
+        throw new Error('Invalid date type');
+    }
+  else if(API == 'MeteoSIX'){}
 }
 
 function initializeWindLayer(map, windData) {
@@ -547,19 +620,9 @@ function calculateGridParameters(bounds, pointDistance=0.0625) {
   return { nx, ny, dx, dy };
 }
 
-// Generar las coordenadas de los puntos
-function generateGridCoordinates(map, bounds, nx, ny, dx, dy) {
-  const longitudes = [], latitudes = [];
-
-  for (let i=0;i<ny;i++) latitudes.push(bounds.northWest.lat - i * dy);
-  for (let j=0;j<nx;j++) longitudes.push(bounds.northWest.lng + j * dx);
-
-  return { latitudes, longitudes };
-}
-
-function gridBuilder(pointDistance, adjustment) {
+function gridBuilder(map, pointDistance, adjustment) {
   // Obtener los límites del mapa
-  const gridLimits = getMapBoundsCoordinates(this.map, adjustment);
+  const gridLimits = getMapBoundsCoordinates(map, adjustment);
 
   console.log("northWest", gridLimits.northWest);
   console.log("northEast", gridLimits.northEast);
@@ -568,15 +631,21 @@ function gridBuilder(pointDistance, adjustment) {
 
   // Datos para la cuadricula
   const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
-
   console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
 
   // Generar las coordenadas de los puntos
-  const { latitudes, longitudes } = generateGridCoordinates(this.map, gridLimits, nx, ny, dx, dy);
+  const points = [];
+  for (let i = 0; i < ny; i++) {
+    const latitude = gridLimits.northWest.lat - i * dy;
+    for (let j = 0; j < nx; j++) {
+      const longitude = gridLimits.northWest.lng + j * dx;
+      points.push(new GridPoint(latitude, longitude));
+    }
+  }
 
   return {
     bounds: gridLimits,
-    gridPoints: { latitudes: latitudes, longitudes: longitudes },
+    points: points,
     dx: dx,
     dy: dy,
     nx: nx,
