@@ -54,7 +54,7 @@ function initDemoMap() {
 // Inicializar el mapa de demostración
 let mapManager = new MapManager('map', {
   center: [42.8769, -8.5442],
-  zoom: 12,
+  zoom: 14,
   updateDelay: 500,
   windyParameters: {
       maxVelocity: 15,
@@ -62,7 +62,7 @@ let mapManager = new MapManager('map', {
   }
 });
 
-// await mapManager.getCurrentData();
+await mapManager.getCurrentData();
 
 document.getElementById('testMapManager').addEventListener('click', async () => {
   //get map data to destroy and recreate the object
