@@ -407,9 +407,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
     if (this._dragTimer) clearTimeout(this._dragTimer);
     // Se usa un debounce de 200ms para no saturar el proceso durante arrastres muy rápidos.
     this._dragTimer = setTimeout(() => {
-      let aux = this._map.getBounds();
-      console.log(aux._southWest);
-      this._clearAndRestart();
+      this._clearAndRestart();console.log('updateWindDuringDrag');
     }, 200);
   },
 

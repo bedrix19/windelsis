@@ -70,7 +70,8 @@ export class MapManager {
     const p2 = grid[i * nx + (j + 1)];     // inferior derecha (Q21)
     const p3 = grid[(i + 1) * nx + j];     // superior izquierda (Q12)
     const p4 = grid[(i + 1) * nx + (j + 1)]; // superior derecha (Q22)
-  
+    console.log("p1", p1, "p2", p2, "p3", p3, "p4", p4);
+
     // Coordenadas para la interpolación
     const x1 = p1.longitude;
     const x2 = p2.longitude;
@@ -183,6 +184,18 @@ export class MapManager {
       }
     });
     */
+    this.map.on('zoomend moveend', () => {
+      var mapBounds = this.map.getBounds();
+      const gridBounds = L.latLngBounds(this.currentGrid.bounds.southWest, this.currentGrid.bounds.northEast);
+        // Comprobamos que ambos extremos, el noreste y el suroeste, estén contenidos en areaBounds.
+        if (  gridBounds.contains(mapBounds.getNorthEast()) &&
+              gridBounds.contains(mapBounds.getSouthWest()) ) {
+          console.log("El área visible del mapa ESTÁ completamente dentro del área definida.");
+        } else {
+          console.log("El área visible del mapa NO está completamente dentro del área definida.");
+        }
+    });
+
     this.map.on('click', (e) => {
       var lat = e.latlng.lat;
       var lng = e.latlng.lng;
@@ -221,10 +234,10 @@ export class MapManager {
 
     try {
       //const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-      const oldGrid = this.currentGrid;
+      const oldGrid = this.currentGrid.grid;
       //const pointDistance = this.options.pointDistance;
 
-      if (oldGrid.windData) {
+      if (false) {
         this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
         console.log("oldGrid.windData", this.currentGrid);
         this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options);
