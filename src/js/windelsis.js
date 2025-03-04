@@ -1,3 +1,5 @@
+import { parseOpenMeteo, parseMeteoSIX } from "./apiParser.js";
+
 export class MapManager {
   constructor(mapId, options = {}) {
     this.map = null;
@@ -59,7 +61,7 @@ export class MapManager {
     const { grid, dx, dy, nx, ny } = this.currentGrid;
   
     // Encontrar los índices de la celda
-    const i = Math.floor((lat - this.currentGrid.bounds.southWest.lat) / dy);
+    const i = Math.floor((this.currentGrid.bounds.northWest.lat - lat) / dy);
     const j = Math.floor((lng - this.currentGrid.bounds.southWest.lng) / dx);
   
     if (i < 0 || i >= ny - 1 || j < 0 || j >= nx - 1) {
@@ -76,6 +78,8 @@ export class MapManager {
     const x2 = p2.longitude;
     const y1 = p1.latitude;
     const y2 = p3.latitude;
+    // Dibujar el area de interpolación
+    L.rectangle([[y1, x1], [y2, x2]], { color: 'red', weight: 1 }).addTo(this.map);
   
     // Extraer los valores numéricos a interpolar (por ejemplo, la temperatura)
     const fQ11 = p1.weatherData.temperature;
@@ -187,6 +191,15 @@ export class MapManager {
       var lat = e.latlng.lat;
       var lng = e.latlng.lng;
     
+      // Llama a la API de open-meteo para obtener los datos de la ubicación
+      const baseUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+      fetch(baseUrl)
+        .then(response => response.json())
+        .then(data => {
+          console.log('Datos de la API:\n',data);
+        })
+        .catch(error => console.error('Error fetching weather data:', error));
+
       // Creamos el popup con algunas opciones básicas
       var popup = L.popup({
         closeOnClick: false, // Evita que se cierre al hacer clic en el mapa
@@ -580,19 +593,8 @@ function setDataFromOpenMeteo(results, points, nx, dateType) {
     const rowPoints = points.slice(rowIndex * nx, (rowIndex + 1) * nx);
     for(let i = 0; i < rowPoints.length; i++) {
       const point = rowPoints[i];
-      point.setWeatherData({
-        temperature: data[i].current?.temperature_2m,
-        wind: {
-          speed: data[i].current?.wind_speed_10m,
-          direction: data[i].current?.wind_direction_10m,
-          units: {
-            speed: data[i].current_units?.wind_speed_10m,
-            temperature: data[i].current_units?.temperature_2m
-          }
-        },
-        timestamp: new Date(data[i].current?.time),
-        rawData: data[i] // Keep raw data for debugging
-      });// console.log(point.toString());
+      point.setWeatherData(parseOpenMeteo(data[i], { timeType: dateType }));
+      console.log(point.toString());
     }
   });
 }
@@ -606,29 +608,25 @@ async function fetchWeatherData(grid, options, API = 'OpenMeteo') {
   const { points, nx, ny } = grid;
   const fetchPromises = []; // Array to store all fetch promises
   
-  // Group points into rows for batch fetching
+  // Agrupar los puntos por filas para llamadas por lotes
   for (let i = 0; i < ny; i++) {
     const rowPoints = points.slice(i * nx, (i + 1) * nx);
-    const lat = rowPoints[0].latitude.toString();
-    const latParams = new Array(nx).fill(lat).join(',');
-    const lonParams = rowPoints.map(p => p.longitude).join(',');
-    
-    let url = buildWeatherURL(API, options.dateType, latParams, lonParams, options.start_date, options.end_date);//console.log("URL", url);
+    const url = buildWeatherURL(API, options.dateType, rowPoints, options.start_date, options.end_date);
     fetchPromises.push(
       fetch(url)
         .then(response => {
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           return response.json();
         })
-        .then(data => ({data, rowIndex: i}))
+        .then(data => ({ data, rowIndex: i }))
     );
   }
 
   try {
     const results = await Promise.all(fetchPromises);
     
-    if(API == 'OpenMeteo') setDataFromOpenMeteo(results, points, nx, options.dateType);
-    else if(API == 'MeteoSIX') setDataFromMeteoSIX(results, points, nx);
+    if (API === 'OpenMeteo') setDataFromOpenMeteo(results, points, nx, options.dateType);
+    else if (API === 'MeteoSIX') setDataFromMeteoSIX(results, points, nx);
 
     return points;
   } catch (error) {
@@ -638,21 +636,44 @@ async function fetchWeatherData(grid, options, API = 'OpenMeteo') {
 }
 
 // Helper function to build weather API URL
-function buildWeatherURL(API, dateType, lat, lon, start_date, end_date) {
-  const baseUrl = 'https://api.open-meteo.com/v1/forecast';
-  if(API == 'OpenMeteo')
-    switch(dateType) {
+function buildWeatherURL(API, dateType, points, start_date, end_date) {
+  let url = '';
+  if (API === 'OpenMeteo') {
+    const nx = points.length;
+    const lat = points[0].latitude.toString();
+    const latParams = new Array(nx).fill(lat).join(',');
+    const lonParams = points.map(p => p.longitude).join(',');
+    const baseUrl = 'https://api.open-meteo.com/v1/forecast';
+    switch (dateType) {
       case 'current':
-        return `${baseUrl}?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}&current=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+        break;
       case 'forecast':
-        return `${baseUrl}?latitude=${lat}&longitude=${lon}&start_date=${start_date}&end_date=${end_date}&daily=wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}&start_date=${start_date}&end_date=${end_date}&daily=wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=ms`;
+        break;
       case 'forecast_hourly':
-        return `${baseUrl}?latitude=${lat}&longitude=${lon}&start_date=${start_date}&end_date=${end_date}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}&start_date=${start_date}&end_date=${end_date}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+        break;
       default:
         throw new Error('Invalid date type');
     }
-  else if(API == 'MeteoSIX'){}
+  } else if (API === 'MeteoSIX') {
+    const coords = points.map(p => `${p.longitude},${p.latitude}`).join(';');
+    const baseUrl = 'https://servizos.meteogalicia.gal/apiv4/getNumericForecastInfo';
+    switch (dateType) {
+      case 'current':
+        url = `${baseUrl}?coords=${coords}&variables=temperature,wind&API_KEY=219XBzNU7vG87JnRXaDq6uh35DbheXH1tAx72B6ElfPoVe7S6mqWUKzSQkJuqcLl`;
+        break;
+      case 'forecast': //por probar
+        url = `${baseUrl}?coords=${coords}&startTime=${start_date}&endTime=${end_date}&variables=temperature,wind`;
+        break;
+      default:
+        throw new Error('Invalid date type for MeteoSIX');
+    }
+  }
+  return url;
 }
+
 
 function initializeWindLayer(map, windData) {
   var velocityLayer = L.velocityLayer({

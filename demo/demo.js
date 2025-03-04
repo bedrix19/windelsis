@@ -73,6 +73,7 @@ document.getElementById('testMapManager').addEventListener('click', async () => 
     center: currentCenter,   
     zoom: currentZoom,
     updateDelay: 500,
+    pointDistance: parseFloat(document.getElementById('pointDistance').value) || undefined,
     windyParameters: {
         maxVelocity: 15,
         velocityScale: 0.008
