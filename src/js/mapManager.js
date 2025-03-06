@@ -1,4 +1,4 @@
-import { parseOpenMeteo, parseMeteoSIX } from "./apiParser.js";
+import { parseOpenMeteo, parseMeteoSIX } from "./apiService.js";
 
 export class MapManager {
   constructor(mapId, options = {}) {
@@ -15,8 +15,9 @@ export class MapManager {
       dy: null,
       nx: null,
       ny: null
-    };    
+    };
     this.options = {
+      randomData: options.randomData || true,
       center: options.center || [42.8, -8],
       zoom: options.zoom || 8,
       minZoom: options.minZoom || 3,
@@ -34,6 +35,24 @@ export class MapManager {
     };
     
     this.initialize(mapId);
+  }
+
+  initialize(mapId) {
+    this.map = L.map(mapId, {
+      center: this.options.center,
+      zoom: this.options.zoom
+    });
+
+    // Add base layers
+    this.setupBaseLayers();
+    
+    // Setup grid parameters
+    this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
+    console.log("currentGrid", this.currentGrid);
+
+    // Initialize event handlers
+    this.initializeEventHandlers();
+
   }
 
   getDefaultWindyParameters() {
@@ -68,10 +87,10 @@ export class MapManager {
       throw new Error('Coordenadas fuera de los límites de la cuadrícula');
     }
   
-    const p1 = grid[i * nx + j];         // inferior izquierda (Q11)
-    const p2 = grid[i * nx + (j + 1)];     // inferior derecha (Q21)
-    const p3 = grid[(i + 1) * nx + j];     // superior izquierda (Q12)
-    const p4 = grid[(i + 1) * nx + (j + 1)]; // superior derecha (Q22)
+    const p1 = grid[i * nx + j];            // inferior izquierda (Q11)
+    const p2 = grid[i * nx + (j + 1)];      // inferior derecha (Q21)
+    const p3 = grid[(i + 1) * nx + j];      // superior izquierda (Q12)
+    const p4 = grid[(i + 1) * nx + (j + 1)];// superior derecha (Q22)
     console.log("p1", p1, "p2", p2, "p3", p3, "p4", p4);
 
     // Coordenadas para la interpolación
@@ -96,24 +115,6 @@ export class MapManager {
     return P;
   }
 
-  initialize(mapId) {
-    this.map = L.map(mapId, {
-        center: this.options.center,
-        zoom: this.options.zoom
-    });
-
-    // Add base layers
-    this.setupBaseLayers();
-    
-    // Setup grid parameters
-    this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
-    console.log("currentGrid", this.currentGrid);
-
-    // Initialize event handlers
-    this.initializeEventHandlers();
-
-  }
-
   setupBaseLayers() {
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     const Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
@@ -126,8 +127,6 @@ export class MapManager {
       'OpenStreetMap': osm,
       'Carto Db Dark': cartoDbDark,
       'cartoDbLight': L.tileLayer('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'),
-      'googleSatellite': L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'),
-      'pnoa2022': L.tileLayer.wms('https://www.ign.es/wms/pnoa-historico'),
     }).addTo(this.map);
 
     cartoDbDark.addTo(this.map);
@@ -226,7 +225,9 @@ export class MapManager {
   }
 
   forceUpdate() {
-    this.updateWindData();
+    this.updateWindData().then(() => {
+      this.updateTemperatureData();
+    });
   }
 
   debounce(func, wait) {
@@ -240,6 +241,35 @@ export class MapManager {
       };
   }
 
+  async updateTemperatureData() {
+    console.log("updateTemperatureData");
+    var cfg = {
+      // radius should be small ONLY if scaleRadius is true (or small radius is intended)
+      "radius": 0.1,
+      "maxOpacity": .8, 
+      // scales the radius based on map zoom
+      "scaleRadius": false, 
+      // if set to false the heatmap uses the global maximum for colorization
+      // if activated: uses the data maximum within the current map boundaries 
+      //   (there will always be a red spot with useLocalExtremas true)
+      "useLocalExtrema": false,
+      latField: 'lat',  // which field name in your data represents the latitude - default "lat"
+      lngField: 'lng',  // which field name in your data represents the longitude - default "lng"
+      valueField: 'count' // which field name in your data represents the data value - default "value"
+    };
+
+    try{
+      var heatmapLayer = new HeatmapOverlay(cfg);
+      console.log("heatmapLayer", heatmapLayer);
+      this.layerControl.addOverlay(heatmapLayer, "API Temperature Data");console.log("layerControl", this.layerControl);
+      this.map.addLayer(heatmapLayer);console.log("map", this.map);
+      let tempData = heatmapDataBuilder(this.currentGrid.grid);console.log("tempData", tempData);
+      heatmapLayer.setData(tempData);console.log("heatmapLayer", heatmapLayer);
+    }catch(error) {
+      console.error('Error updating temperature data:', error);
+    }
+  }
+
   async updateWindData(dateOptions = {}) {
     console.log("updateWindData", dateOptions);
     if (this.isUpdating) return;
@@ -250,7 +280,7 @@ export class MapManager {
       const oldGrid = this.currentGrid.grid;
       //const pointDistance = this.options.pointDistance;
 
-      if (false) {
+      if (oldGrid !== undefined) {
         this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
         console.log("oldGrid.windData", this.currentGrid);
         this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options);
@@ -292,7 +322,37 @@ export class MapManager {
         */
       }else{
         console.log("Primera carga de datos");
-        this.currentGrid.grid = await fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
+        if(!this.options.randomData) {
+          this.currentGrid.grid = await fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
+        } else {
+            console.log("Generando datos aleatorios uniformes");
+            const baseTemperature = (Math.random() * 10) + 15; // Temperatura base entre 15 y 25°C
+            const baseWindSpeed = (Math.random() * 5) + 5; // Velocidad del viento base entre 5 y 10 m/s
+            const baseWindDirection = Math.random() * 360; // Dirección del viento base entre 0 y 360°
+
+            this.currentGrid.points.forEach(point => {
+            // Variación
+            const randomTemperature = (baseTemperature + (Math.random() * 2 - 5)).toFixed(2);
+            const randomWindSpeed = (baseWindSpeed + (Math.random() * 2 - 10)).toFixed(2);
+            const randomWindDirection = (baseWindDirection + (Math.random() * 10 - 90)).toFixed(2);
+
+            point.setWeatherData({
+              weather_units: {
+              temperature: '°C',
+              wind_speed: 'm/s',
+              wind_direction: '°'
+              },
+              temperature: parseFloat(randomTemperature),
+              wind: {
+              speed: parseFloat(randomWindSpeed),
+              direction: parseFloat(randomWindDirection)
+              },
+              timestamp: new Date(),
+              rawData: null
+            });
+            });
+            this.currentGrid.grid = this.currentGrid.points;
+        }
 
         this.velocityLayer = DrawWindData({
           map: this.map,
@@ -498,6 +558,23 @@ function getMapBoundsCoordinates(map, adjustment = 0) {
       roundToMultiple(southEast.lng, MULTIPLE, true) + adjustment
     )
   };
+}
+
+// Logica para contrsuir el array para heatmap
+function heatmapDataBuilder(grid){
+  var tempData = [];
+  var maxTemp = 0;
+  for (let i = 0; i < grid.length; i++) {
+    const point = grid[i];
+    if(point.weatherData.temperature > maxTemp) maxTemp = point.weatherData.temperature;
+    tempData.push({
+      lat: point.latitude,
+      lng: point.longitude,
+      count: point.weatherData.temperature
+    });
+  }
+  maxTemp = maxTemp > 40 ? maxTemp : 40;
+  return {max: maxTemp, data: tempData};
 }
 
 // Logica para construir el json para usar con leaflet-velocity

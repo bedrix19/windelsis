@@ -1,0 +1,1 @@
+// Funciones de utilidad para el manejo de la grilla
