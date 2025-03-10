@@ -5,10 +5,11 @@ import { MapManager } from "../src/js/mapManager.js";
  * Coruña: 43.3623, -8.4104
  * Vigo: 42.2406, -8.7207
  * SdC: 42.8769, -8.5442
+ * Pamplona: 42.8169, -1.6458
  */
 let mapManager = new MapManager('map', {
   center: [42.8769, -8.5442],
-  zoom: 14,
+  zoom: 7,
   updateDelay: 500,
   windyParameters: {
       maxVelocity: 15,

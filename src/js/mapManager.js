@@ -3,6 +3,7 @@ import { parseOpenMeteo, parseMeteoSIX } from "./apiService.js";
 export class MapManager {
   constructor(mapId, options = {}) {
     this.map = null;
+    this.heatmapLayer = null;
     this.velocityLayer = null;
     this.layerControl = null;
     this.isUpdating = false;
@@ -11,6 +12,7 @@ export class MapManager {
     this.currentGrid = {
       bounds: null,
       grid: [],
+      gridPointsMap: null,
       dx: null,
       dy: null,
       nx: null,
@@ -23,9 +25,8 @@ export class MapManager {
       minZoom: options.minZoom || 3,
       maxZoom: options.maxZoom || 18,
       updateDelay: options.updateDelay || 500,
-      pointDistance:  options.pointDistance !== undefined
-                      ? options.pointDistance
-                      : this.getPointDistanceFromZoom(options.zoom),
+      pointDistance:  options.pointDistance || null,
+      maxGridPoints: options.maxGridPoints || 1000,
       mapAdjustment: options.mapAdjustment || 0,
       windyParameters: options.windyParameters || this.getDefaultWindyParameters(),
       dateType: options.dateType || 'current',
@@ -38,6 +39,7 @@ export class MapManager {
   }
 
   initialize(mapId) {
+    console.log("######## initialize ########");
     this.map = L.map(mapId, {
       center: this.options.center,
       zoom: this.options.zoom
@@ -47,7 +49,12 @@ export class MapManager {
     this.setupBaseLayers();
     
     // Setup grid parameters
-    this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
+    const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
+    const bounds = L.latLngBounds(mapBounds.southWest, mapBounds.northEast);
+    this.options.pointDistance =  this.options.pointDistance !== null
+                                  ? this.options.pointDistance
+                                  : this.getPointDistanceFromBounds(bounds);
+    this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds);
     console.log("currentGrid", this.currentGrid);
 
     // Initialize event handlers
@@ -67,6 +74,9 @@ export class MapManager {
     };
   }
 
+  getPointDistanceFromBounds(bounds) {
+    return calculateOptimalPointDistance(bounds, this.options.maxGridPoints);
+  }
   getPointDistanceFromZoom(zoom) {
     console.log("getPointDistanceFromZoom", zoom);
     if (zoom <= 7) return 1;
@@ -133,19 +143,21 @@ export class MapManager {
   }
 
   destroy(){
-    // Remover la capa de viento, si existe
     if (this.velocityLayer) {
       this.map.removeLayer(this.velocityLayer);
       this.velocityLayer = null;
     }
   
-    // Remover el control de capas, si existe
+    if (this.heatmapLayer) {
+      this.map.removeLayer(this.heatmapLayer);
+      this.heatmapLayer = null;
+    }
+
     if (this.layerControl) {
       this.map.removeControl(this.layerControl);
       this.layerControl = null;
     }
   
-    // Cancelar cualquier actualización pendiente
     if (this.updateTimeout) {
       clearTimeout(this.updateTimeout);
       this.updateTimeout = null;
@@ -164,6 +176,7 @@ export class MapManager {
   }
 
   initializeEventHandlers() {
+    console.log("######## initializeEventHandlers ########");
     /*Estas lineas hacen que el mapa funcione mal
     const debouncedUpdate = this.debounce(() => {
         this.updateWindData();
@@ -196,6 +209,20 @@ export class MapManager {
           console.log("El área visible del mapa ESTÁ completamente dentro del área definida.");
         } else {
           console.log("El área visible del mapa NO está completamente dentro del área definida.");
+          // obtener los puntos que faltan
+          const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
+          console.log("mapBounds", mapBounds);
+          console.log(this.map.getBounds());
+          // construir los bounds como si fuesen de leaflet
+          const bounds = L.latLngBounds(mapBounds.southWest, mapBounds.northEast);
+          console.log("bounds", bounds);
+          const pointDistance = this.getPointDistanceFromBounds(bounds);
+          console.log("pointDistance", pointDistance);
+          const missingPoints = getNewGridPoints(this.currentGrid, mapBounds, pointDistance, pointDistance);
+          console.log("Nuevos puntos:", missingPoints);
+          console.log("Puntos existentes:", this.currentGrid.grid);
+          // obtenemos los datos de los nuevos puntos y los juntamos con los existentes en una matriz ordenada de noroeste a sureste
+          // POR IMPLEMENTAR
         }
     });
 
@@ -208,7 +235,16 @@ export class MapManager {
       fetch(baseUrl)
         .then(response => response.json())
         .then(data => {
-          console.log('Datos de la API:\n',data);
+          console.log('Datos de open-meteo:\n',data);
+        })
+        .catch(error => console.error('Error fetching weather data:', error));
+
+      const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+      const baseUrl2 = `https://servizos.meteogalicia.gal/apiv4/getNumericForecastInfo?coords=${lng},${lat}&variables=temperature,wind&API_KEY=219XBzNU7vG87JnRXaDq6uh35DbheXH1tAx72B6ElfPoVe7S6mqWUKzSQkJuqcLl`;
+      fetch(baseUrl2)
+        .then(response => response.json())
+        .then(data => {
+          console.log('Datos de MeteoSIX:\n',data);
         })
         .catch(error => console.error('Error fetching weather data:', error));
 
@@ -241,37 +277,55 @@ export class MapManager {
       };
   }
 
-  async updateTemperatureData() {
-    console.log("updateTemperatureData");
-    var cfg = {
-      // radius should be small ONLY if scaleRadius is true (or small radius is intended)
-      "radius": 0.1,
-      "maxOpacity": .8, 
-      // scales the radius based on map zoom
-      "scaleRadius": false, 
-      // if set to false the heatmap uses the global maximum for colorization
-      // if activated: uses the data maximum within the current map boundaries 
-      //   (there will always be a red spot with useLocalExtremas true)
-      "useLocalExtrema": false,
-      latField: 'lat',  // which field name in your data represents the latitude - default "lat"
-      lngField: 'lng',  // which field name in your data represents the longitude - default "lng"
-      valueField: 'count' // which field name in your data represents the data value - default "value"
-    };
 
-    try{
-      var heatmapLayer = new HeatmapOverlay(cfg);
-      console.log("heatmapLayer", heatmapLayer);
-      this.layerControl.addOverlay(heatmapLayer, "API Temperature Data");console.log("layerControl", this.layerControl);
-      this.map.addLayer(heatmapLayer);console.log("map", this.map);
-      let tempData = heatmapDataBuilder(this.currentGrid.grid);console.log("tempData", tempData);
-      heatmapLayer.setData(tempData);console.log("heatmapLayer", heatmapLayer);
-    }catch(error) {
+  async updateWeatherData(){
+    // Logica para actualizar la grilla de datos meteorológicos
+  }
+
+  async updateTemperatureData() {
+    console.log("######## updateTemperatureData ########");return
+    try {
+      // Remove existing heatmap layer if it exists
+      if (this.heatmapLayer) {
+        this.map.removeLayer(this.heatmapLayer);
+      }
+  
+      // Prepare data points for heat layer
+      const heatPoints = this.currentGrid.grid.map(point => {
+        return [
+          point.latitude,
+          point.longitude,
+          point.weatherData.temperature
+        ];
+      });
+  
+      // Configure heat layer
+      this.heatmapLayer = L.heatLayer(heatPoints, {
+        radius: 50,
+        blur: 15,
+        maxZoom: 18,
+        max: 40, // maximum temperature to normalize colors
+        minOpacity: 0.3,
+        gradient: {
+          0.0: 'blue',    // Cold temperatures
+          0.25: 'cyan',
+          0.5: 'lime',
+          0.75: 'yellow',
+          1.0: 'red'      // Hot temperatures
+        }
+      });
+  
+      // Add layer to map and layer control
+      this.layerControl.addOverlay(this.heatmapLayer, "Temperature Heatmap");
+      this.heatmapLayer.addTo(this.map);
+  
+    } catch(error) {
       console.error('Error updating temperature data:', error);
     }
   }
 
   async updateWindData(dateOptions = {}) {
-    console.log("updateWindData", dateOptions);
+    console.log("######## updateWindData ########", dateOptions);
     if (this.isUpdating) return;
     this.isUpdating = true;
 
@@ -325,33 +379,7 @@ export class MapManager {
         if(!this.options.randomData) {
           this.currentGrid.grid = await fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
         } else {
-            console.log("Generando datos aleatorios uniformes");
-            const baseTemperature = (Math.random() * 10) + 15; // Temperatura base entre 15 y 25°C
-            const baseWindSpeed = (Math.random() * 5) + 5; // Velocidad del viento base entre 5 y 10 m/s
-            const baseWindDirection = Math.random() * 360; // Dirección del viento base entre 0 y 360°
-
-            this.currentGrid.points.forEach(point => {
-            // Variación
-            const randomTemperature = (baseTemperature + (Math.random() * 2 - 5)).toFixed(2);
-            const randomWindSpeed = (baseWindSpeed + (Math.random() * 2 - 10)).toFixed(2);
-            const randomWindDirection = (baseWindDirection + (Math.random() * 10 - 90)).toFixed(2);
-
-            point.setWeatherData({
-              weather_units: {
-              temperature: '°C',
-              wind_speed: 'm/s',
-              wind_direction: '°'
-              },
-              temperature: parseFloat(randomTemperature),
-              wind: {
-              speed: parseFloat(randomWindSpeed),
-              direction: parseFloat(randomWindDirection)
-              },
-              timestamp: new Date(),
-              rawData: null
-            });
-            });
-            this.currentGrid.grid = this.currentGrid.points;
+          this.setRandomGridData();
         }
 
         this.velocityLayer = DrawWindData({
@@ -397,6 +425,36 @@ export class MapManager {
     });
   }
 
+  setRandomGridData() {
+    console.log("Generando datos aleatorios uniformes");
+    const baseTemperature = (Math.random() * 10) + 15;
+    const baseWindSpeed = (Math.random() * 5) + 15;
+    const baseWindDirection = Math.random() * 360;
+
+    this.currentGrid.points.forEach(point => {
+      const randomTemperature = (baseTemperature + (Math.random() * 2 - 5)).toFixed(2);
+      const randomWindSpeed = (baseWindSpeed + (Math.random() * 2 - 10)).toFixed(2);
+      const randomWindDirection = (baseWindDirection + (Math.random() * 10 - 90)).toFixed(2);
+
+      point.setWeatherData({
+        weather_units: {
+        temperature: '°C',
+        wind_speed: 'm/s',
+        wind_direction: '°'
+        },
+        temperature: parseFloat(randomTemperature),
+        wind: {
+        speed: parseFloat(randomWindSpeed),
+        direction: parseFloat(randomWindDirection)
+        },
+        timestamp: new Date().toISOString(), // Format: 2025-02-24T09:19:57.000Z
+        rawData: null
+      });
+    });
+    console.log("currentGrid random data", this.currentGrid);
+    this.currentGrid.grid = this.currentGrid.points;
+  }
+
   setWindyParameters(parameters) {
     this.options.windyParameters = { ...this.options.windyParameters, ...parameters };
     if (this.velocityLayer) {
@@ -430,6 +488,7 @@ class GridPoint {
   constructor(latitude, longitude) {
     this.latitude = latitude;
     this.longitude = longitude;
+    this.id = generatePointKey(latitude,longitude);
     this.weatherData = {
       weather_units: {
         temperature: '°C',
@@ -521,16 +580,36 @@ function getBoundsAtZoom(map, zoomLevel) {
   return L.latLngBounds(southWest, northEast);
 }
 
-// Obtener las coordenadas de los límites del mapa
+function calculateOptimalPointDistance(bounds, maxPoints = 150) {
+  const possibleDistances = [0.0625, 0.125, 0.25, 0.5, 1];
+  const lonRange = Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
+  const latRange = Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat);
+
+  // Calculate points needed for each distance
+  for (const distance of possibleDistances) {
+    const nx = Math.ceil(lonRange / distance) + 1;
+    const ny = Math.ceil(latRange / distance) + 1;
+    const totalPoints = nx * ny;
+
+    if (totalPoints <= maxPoints) {
+      console.log(`Selected point distance: ${distance}° (${nx}x${ny}=${totalPoints} points)`);
+      return distance;
+    }
+  }
+
+  // If all distances would exceed maxPoints, return the largest distance
+  console.log(`Using maximum distance: 1° due to area size`);
+  return possibleDistances[possibleDistances.length - 1];
+}
+
+// Obtener las coordenadas de los límites del mapa que sean multiplos de MULTIPLE
 function getMapBoundsCoordinates(map, adjustment = 0) {
-  const MULTIPLE = 0.5;
-  const bounds =  map.getZoom() >= 11
-                  ? getBoundsAtZoom(map, 11)
-                  : map.getBounds();
-  const southWest = bounds.getSouthWest();                  L.marker(southWest).addTo(map);
-  const northEast = bounds.getNorthEast();                  L.marker(northEast).addTo(map);
-  const northWest = L.latLng(northEast.lat, southWest.lng); L.marker(northWest).addTo(map);
-  const southEast = L.latLng(southWest.lat, northEast.lng); L.marker(southEast).addTo(map);
+  const MULTIPLE = 0.25;
+  const bounds =  map.getBounds();
+  const southWest = bounds.getSouthWest();                  //L.marker(southWest).addTo(map);
+  const northEast = bounds.getNorthEast();                  //L.marker(northEast).addTo(map);
+  const northWest = L.latLng(northEast.lat, southWest.lng); //L.marker(northWest).addTo(map);
+  const southEast = L.latLng(southWest.lat, northEast.lng); //L.marker(southEast).addTo(map);
 
   console.log("Puntos de los límites del mapa\nNW:", northWest," NE:", northEast," SW:", southWest," SE:", southEast);
 
@@ -677,15 +756,75 @@ function windyDataBuilder(currentGrid, options) {
   return windData;
 }
 
-function setDataFromOpenMeteo(results, points, nx, dateType) {
-  // Update points with weather data (current data)
-  results.forEach(({data, rowIndex}) => {
-    const rowPoints = points.slice(rowIndex * nx, (rowIndex + 1) * nx);
-    for(let i = 0; i < rowPoints.length; i++) {
-      const point = rowPoints[i];
-      point.setWeatherData(parseOpenMeteo(data[i], { timeType: dateType }));
-      console.log(point.toString());
-    }
+/**
+ * Ajusta una coordenada al múltiplo más cercano de gridStep.
+ *
+ * @param {number} coord - La coordenada a ajustar.
+ * @param {number} gridStep - El paso de la grilla, por defecto 0.0625.
+ * @returns {number} - La coordenada ajustada.
+ */
+function adjustToGrid(coord, gridStep = 0.0625) {
+  return Math.round(coord / gridStep) * gridStep;
+}
+
+/**
+ * Genera una clave única a partir de latitud y longitud,
+ * asegurando que se usen 6 decimales en el string.
+ *
+ * @param {number} latitude
+ * @param {number} longitude
+ * @returns {string} - Clave en formato "latitud_longitud".
+ */
+function generatePointKey(latitude, longitude, decimals = 4) {
+  return `${latitude.toFixed(decimals)}_${longitude.toFixed(decimals)}`;
+}
+
+/**
+ * Construye un lookup (diccionario) a partir del array de GridPoint.
+ *
+ * @param {Array} points - Array de objetos GridPoint.
+ * @returns {Map} - Map con claves generadas a partir de las coordenadas.
+ */
+function buildPointsLookup(points) {
+  const lookup = new Map();
+  points.forEach(point => {
+    const key = generatePointKey(point.latitude, point.longitude);
+    lookup.set(key, point);
+  });
+  return lookup;
+}
+
+/**
+ * Actualiza los GridPoint con los datos del clima obtenidos de la API.
+ * Se ajustan las coordenadas de weatherData al grid antes de generar la llave.
+ *
+ * @param {Array} results - Resultados de la API.
+ * @param {Array} points - Array de GridPoint.
+ * @param {Map} pointsLookup - Mapa de GridPoint indexados por su llave.
+ * @param {string} dateType - Tipo de fecha para el parseo.
+ */
+function setDataFromOpenMeteo(results, points, pointsLookup, dateType) {
+  results.forEach(({ data, batchIndex }) => {
+    data.forEach((weatherData, index) => {
+      /* // Usamos las llaves generadas para buscar el GridPoint correspondiente
+      // Extraemos las coordenadas "crudas"
+      const { latitude: rawLat, longitude: rawLon } = weatherData;
+      // Ajustamos las coordenadas al múltiplo de grid (ej.: 0.0625)
+      const latitude = adjustToGrid(rawLat, 0.0625);
+      const longitude = adjustToGrid(rawLon, 0.0625);
+      // Generamos la llave con 6 decimales
+      const key = generatePointKey(latitude, longitude);
+      const point = pointsLookup.get(key);
+      if (point) {
+        point.setWeatherData(parseOpenMeteo(weatherData, { timeType: dateType }));
+      } else {
+        console.warn(`No se encontró un GridPoint para las coordenadas ${key}`);
+      }
+      */
+      // Implementación más sencilla
+      let point = points[batchIndex * 100 + index];
+      point.setWeatherData(parseOpenMeteo(weatherData, { timeType: dateType }));
+    });
   });
 }
 
@@ -698,24 +837,28 @@ async function fetchWeatherData(grid, options, API = 'OpenMeteo') {
   const { points, nx, ny } = grid;
   const fetchPromises = []; // Array to store all fetch promises
   
-  // Agrupar los puntos por filas para llamadas por lotes
-  for (let i = 0; i < ny; i++) {
-    const rowPoints = points.slice(i * nx, (i + 1) * nx);
-    const url = buildWeatherURL(API, options.dateType, rowPoints, options.start_date, options.end_date);
+  // Agrupar los puntos en lotes de batchSize coordenadas por llamada
+  const batchSize = 100;
+  for (let i = 0; i < points.length; i += batchSize) {
+    const batchPoints = points.slice(i, i + batchSize);
+    const url = buildWeatherURL(API, batchPoints, options.dateType, options.start_date, options.end_date);
+    console.log("url", url); //return;
     fetchPromises.push(
       fetch(url)
         .then(response => {
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           return response.json();
         })
-        .then(data => ({ data, rowIndex: i }))
+        .then(data => ({ data, batchIndex: i / batchSize }))
     );
   }
 
   try {
-    const results = await Promise.all(fetchPromises);
+    const results = await Promise.all(fetchPromises); console.log("API results", results);
     
-    if (API === 'OpenMeteo') setDataFromOpenMeteo(results, points, nx, options.dateType);
+    const pointsLookup = buildPointsLookup(points);
+
+    if (API === 'OpenMeteo') setDataFromOpenMeteo(results, points, pointsLookup, options.dateType);
     else if (API === 'MeteoSIX') setDataFromMeteoSIX(results, points, nx);
 
     return points;
@@ -726,12 +869,10 @@ async function fetchWeatherData(grid, options, API = 'OpenMeteo') {
 }
 
 // Helper function to build weather API URL
-function buildWeatherURL(API, dateType, points, start_date, end_date) {
+function buildWeatherURL(API, points, dateType, start_date, end_date) {
   let url = '';
   if (API === 'OpenMeteo') {
-    const nx = points.length;
-    const lat = points[0].latitude.toString();
-    const latParams = new Array(nx).fill(lat).join(',');
+    const latParams = points.map(p => p.latitude).join(',');
     const lonParams = points.map(p => p.longitude).join(',');
     const baseUrl = 'https://api.open-meteo.com/v1/forecast';
     switch (dateType) {
@@ -808,14 +949,14 @@ function calculateGridParameters(bounds, pointDistance=0.0625) {
   return { nx, ny, dx, dy };
 }
 
-function gridBuilder(map, pointDistance, adjustment) {
-  // Obtener los límites del mapa
-  const gridLimits = getMapBoundsCoordinates(map, adjustment);
-
+function gridBuilder(map, pointDistance, gridLimits) {
   console.log("northWest", gridLimits.northWest); L.marker(gridLimits.northWest).addTo(map);
   console.log("northEast", gridLimits.northEast); L.marker(gridLimits.northEast).addTo(map);
   console.log("southWest", gridLimits.southWest); L.marker(gridLimits.southWest).addTo(map);
   console.log("southEast", gridLimits.southEast); L.marker(gridLimits.southEast).addTo(map);
+
+  // Mapa de GridPoints
+  const gridPointsMap = new Map();
 
   // Datos para la cuadricula
   const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
@@ -827,13 +968,16 @@ function gridBuilder(map, pointDistance, adjustment) {
     const latitude = gridLimits.northWest.lat - i * dy;
     for (let j = 0; j < nx; j++) {
       const longitude = gridLimits.northWest.lng + j * dx;
-      points.push(new GridPoint(latitude, longitude));
+      const gp = new GridPoint(latitude, longitude);
+      points.push(gp);
+      gridPointsMap.set(gp.id, gp);
     }
   }
 
   return {
     bounds: gridLimits,
     points: points,
+    gridPointsMap: gridPointsMap,
     dx: dx,
     dy: dy,
     nx: nx,
@@ -842,33 +986,31 @@ function gridBuilder(map, pointDistance, adjustment) {
 }
 
 // Primera implementación, pero solo sirve para hallar '4 rectas', no para el resto
-function getNewGridPoints(oldBounds, newBounds, dx, dy) {
-  // Calcular los nuevos extremos en base a newBounds pero que sean multiplos de dx y dy
-  let newNorthWest, newNorthEast, newSouthWest, newSouthEast;
+function getNewGridPoints(oldGrid, newBounds, dx, dy) {
+  const newPoints = [];
 
-  const newPoints = {
-      latitudes: [],
-      longitudes: []
-  };
+  // Crear un set para almacenar las claves de los puntos existentes
+  const existingPoints = new Set();
+  let count = 0;
+  oldGrid.grid.forEach(point => {
+    existingPoints.add(generatePointKey(point.latitude, point.longitude));
+    count++;
+  });
+  console.log("Puntos obviados", count);
 
-  // Si hay nuevos puntos al norte
-  for (let lat = oldBounds.northWest.lat + dy; lat <= newBounds.northWest.lat; lat += dy) {
-      newPoints.latitudes.push(lat);
+  // Función para agregar nuevos puntos si no existen en el set
+  function addNewPoint(lat, lon) {
+    const key = generatePointKey(lat, lon);
+    if (!existingPoints.has(key)) {
+      newPoints.push(new GridPoint(lat, lon));
+    }
   }
 
-  // Si hay nuevos puntos al sur
-  for (let lat = oldBounds.southWest.lat - dy; lat >= newBounds.southWest.lat; lat -= dy) {
-      newPoints.latitudes.push(lat);
-  }
-
-  // Si hay nuevos puntos al este
-  for (let lon = oldBounds.northEast.lng + dx; lon <= newBounds.northEast.lng; lon += dx) {
-      newPoints.longitudes.push(lon);
-  }
-
-  // Si hay nuevos puntos al oeste
-  for (let lon = oldBounds.northWest.lng - dx; lon >= newBounds.northWest.lng; lon -= dx) {
-      newPoints.longitudes.push(lon);
+  // Generar nuevos puntos de noroeste a sureste
+  for (let lat = newBounds.northWest.lat; lat >= newBounds.southEast.lat; lat -= dy) {
+    for (let lon = newBounds.northWest.lng; lon <= newBounds.southEast.lng; lon += dx) {
+      addNewPoint(lat, lon);
+    }
   }
 
   return newPoints;
