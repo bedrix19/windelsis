@@ -200,7 +200,7 @@ export class MapManager {
       }
     });
     */
-    this.map.on('zoomend moveend', () => {
+    this.map.on('zoomend moveend', async () => {
       var mapBounds = this.map.getBounds();
       const gridBounds = L.latLngBounds(this.currentGrid.bounds.southWest, this.currentGrid.bounds.northEast);
         // Comprobamos que ambos extremos, el noreste y el suroeste, estén contenidos en areaBounds.
@@ -218,11 +218,15 @@ export class MapManager {
           console.log("bounds", bounds);
           const pointDistance = this.getPointDistanceFromBounds(bounds);
           console.log("pointDistance", pointDistance);
+          /*
           const missingPoints = getNewGridPoints(this.currentGrid, mapBounds, pointDistance, pointDistance);
           console.log("Nuevos puntos:", missingPoints);
           console.log("Puntos existentes:", this.currentGrid.grid);
-          // obtenemos los datos de los nuevos puntos y los juntamos con los existentes en una matriz ordenada de noroeste a sureste
+          // Actualizar la cuadricula con los datos nuevos, pero que estén ordenados de noroeste a sureste
           // POR IMPLEMENTAR
+          */
+          this.currentGrid = gridBuilder(this.map, pointDistance, mapBounds);
+          await this.updateWindData();
         }
     });
 
@@ -334,7 +338,7 @@ export class MapManager {
       const oldGrid = this.currentGrid.grid;
       //const pointDistance = this.options.pointDistance;
 
-      if (oldGrid !== undefined) {
+      if (false) {
         this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
         console.log("oldGrid.windData", this.currentGrid);
         this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options);
@@ -376,11 +380,7 @@ export class MapManager {
         */
       }else{
         console.log("Primera carga de datos");
-        if(!this.options.randomData) {
-          this.currentGrid.grid = await fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
-        } else {
-          this.setRandomGridData();
-        }
+        await fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
 
         this.velocityLayer = DrawWindData({
           map: this.map,
@@ -423,36 +423,6 @@ export class MapManager {
       end_date, 
       hour_index 
     });
-  }
-
-  setRandomGridData() {
-    console.log("Generando datos aleatorios uniformes");
-    const baseTemperature = (Math.random() * 10) + 15;
-    const baseWindSpeed = (Math.random() * 5) + 15;
-    const baseWindDirection = Math.random() * 360;
-
-    this.currentGrid.points.forEach(point => {
-      const randomTemperature = (baseTemperature + (Math.random() * 2 - 5)).toFixed(2);
-      const randomWindSpeed = (baseWindSpeed + (Math.random() * 2 - 10)).toFixed(2);
-      const randomWindDirection = (baseWindDirection + (Math.random() * 10 - 90)).toFixed(2);
-
-      point.setWeatherData({
-        weather_units: {
-        temperature: '°C',
-        wind_speed: 'm/s',
-        wind_direction: '°'
-        },
-        temperature: parseFloat(randomTemperature),
-        wind: {
-        speed: parseFloat(randomWindSpeed),
-        direction: parseFloat(randomWindDirection)
-        },
-        timestamp: new Date().toISOString(), // Format: 2025-02-24T09:19:57.000Z
-        rawData: null
-      });
-    });
-    console.log("currentGrid random data", this.currentGrid);
-    this.currentGrid.grid = this.currentGrid.points;
   }
 
   setWindyParameters(parameters) {
@@ -559,6 +529,41 @@ class GridPoint {
   }
 }
 
+function generateRandomGridData(points) {
+  console.log("Generando datos aleatorios uniformes");
+  const baseTemperature = (Math.random() * 10) + 15;
+  const baseWindSpeed = (Math.random() * 5) + 15;
+  const baseWindDirection = Math.random() * 360;
+
+  // Check if points is a Map and convert to array if necessary
+  const pointsArray = points instanceof Map ? Array.from(points.values()) : points;
+
+  pointsArray.forEach(point => {
+    const randomTemperature = (baseTemperature + (Math.random() * 2 - 5)).toFixed(2);
+    const randomWindSpeed = (baseWindSpeed + (Math.random() * 2 - 10)).toFixed(2);
+    const randomWindDirection = (baseWindDirection + (Math.random() * 10 - 90)).toFixed(2);
+
+    const weatherData = {
+      weather_units: {
+        temperature: '°C',
+        wind_speed: 'm/s',
+        wind_direction: '°'
+      },
+      temperature: parseFloat(randomTemperature),
+      wind: {
+        speed: parseFloat(randomWindSpeed),
+        direction: parseFloat(randomWindDirection)
+      },
+      timestamp: new Date().toISOString(), // Format: 2025-02-24T09:19:57.000Z
+      rawData: null
+    };
+
+    point.setWeatherData(weatherData);
+  });
+
+  console.log("Random grid data generated");
+}
+
 // Convertir dirección del viento a componentes u y v
 function convertWindDirection(speed, direction) {
   const rad = direction * (Math.PI / 180);
@@ -657,8 +662,8 @@ function heatmapDataBuilder(grid){
 }
 
 // Logica para construir el json para usar con leaflet-velocity
-function windyDataBuilder(currentGrid, options) {
-  const { bounds, grid, dx, dy, nx, ny } = currentGrid;
+function windyDataBuilder(Grid, options) {
+  const { bounds, grid, dx, dy, nx, ny } = Grid;
   const dateType = options.dateType;
   const hour_index = options.hour_index;
 
@@ -834,7 +839,12 @@ function setDataFromOpenMeteo(results, points, pointsLookup, dateType) {
  * latitudes, longitudes, nx, ny
  */
 async function fetchWeatherData(grid, options, API = 'OpenMeteo') {
-  const { points, nx, ny } = grid;
+  const points = grid.grid || grid; // Use grid.grid if it exists, otherwise use grid directly
+  if (options.randomData) {
+    generateRandomGridData(points);
+    return;
+  }
+
   const fetchPromises = []; // Array to store all fetch promises
   
   // Agrupar los puntos en lotes de batchSize coordenadas por llamada
@@ -976,7 +986,7 @@ function gridBuilder(map, pointDistance, gridLimits) {
 
   return {
     bounds: gridLimits,
-    points: points,
+    grid: points,
     gridPointsMap: gridPointsMap,
     dx: dx,
     dy: dy,
@@ -991,12 +1001,9 @@ function getNewGridPoints(oldGrid, newBounds, dx, dy) {
 
   // Crear un set para almacenar las claves de los puntos existentes
   const existingPoints = new Set();
-  let count = 0;
   oldGrid.grid.forEach(point => {
     existingPoints.add(generatePointKey(point.latitude, point.longitude));
-    count++;
   });
-  console.log("Puntos obviados", count);
 
   // Función para agregar nuevos puntos si no existen en el set
   function addNewPoint(lat, lon) {
