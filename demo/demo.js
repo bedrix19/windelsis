@@ -9,12 +9,8 @@ import { MapManager } from "../src/js/mapManager.js";
  */
 let mapManager = new MapManager('map', {
   center: [42.8769, -8.5442],
-  zoom: 7,
+  zoom: 9,
   updateDelay: 500,
-  windyParameters: {
-      maxVelocity: 15,
-      velocityScale: 0.008
-  }
 });
 
 await mapManager.getCurrentData();

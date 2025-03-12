@@ -28,7 +28,7 @@ export class MapManager {
       pointDistance:  options.pointDistance || null,
       maxGridPoints: options.maxGridPoints || 1000,
       mapAdjustment: options.mapAdjustment || 0,
-      windyParameters: options.windyParameters || this.getDefaultWindyParameters(),
+      windyParameters: this.getDefaultWindyParameters(),
       dateType: options.dateType || 'current',
       start_date: options.start_date || null,
       end_date: options.end_date || null,
@@ -54,7 +54,8 @@ export class MapManager {
     this.options.pointDistance =  this.options.pointDistance !== null
                                   ? this.options.pointDistance
                                   : this.getPointDistanceFromBounds(bounds);
-    this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds);
+    this.currentGrid.gridPointsMap = new Map();
+    this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds, this.currentGrid.gridPointsMap);
     console.log("currentGrid", this.currentGrid);
 
     // Initialize event handlers
@@ -64,16 +65,61 @@ export class MapManager {
 
   getDefaultWindyParameters() {
     return {
-      maxVelocity: 10,
       minVelocity: 0,
+      maxVelocity: 10,
       velocityScale: 0.005,
       particleAge: 90,
       lineWidth: 1,
       particleMultiplier: 1/300,
-      frameRate: 15
+      frameRate: 15,
+      colorScale: [
+        "rgb(0, 0, 128)",    // Baja intensidad: azul marino, muy visible sobre fondo natural.
+        "rgb(0, 0, 255)",    // Intensidad moderada: azul vibrante.
+        "rgb(75, 0, 130)",   // Transición: índigo.
+        "rgb(138, 43, 226)", // Avanzando hacia tonos fríos: azul violeta.
+        "rgb(255, 0, 255)",  // Punto medio: magenta, muy contrastante.
+        "rgb(255, 0, 200)",  // Intensificación: magenta brillante.
+        "rgb(255, 0, 150)",  // Más cerca del rango cálido: tono rojizo.
+        "rgb(255, 0, 100)",  // Intensidad alta: naranja fuerte.
+        "rgb(255, 0, 50)",   // Casi al máximo: rojo intenso.
+        "rgb(255, 0, 0)"     // Máxima intensidad: rojo puro.
+]
     };
   }
+/**
+ * blanco
+  "rgb(12, 44, 132)",
+  "rgb(49, 130, 189)",
+  "rgb(107, 174, 214)",
+  "rgb(189, 215, 231)",
+  "rgb(254, 224, 139)",
+  "rgb(253, 174, 97)",
+  "rgb(244, 109, 67)",
+  "rgb(215, 48, 39)",
+  "rgb(165, 0, 38)"
+  negro
+  "rgb(0, 255, 255)",
+  "rgb(51, 255, 204)",
+  "rgb(102, 255, 153)",
+  "rgb(153, 255, 102)",
+  "rgb(204, 255, 51)",
+  "rgb(255, 255, 0)",
+  "rgb(255, 204, 51)",
+  "rgb(255, 153, 102)",
+  "rgb(255, 102, 153)",
+  "rgb(255, 51, 204)",
+  "rgb(255, 0, 255)"
+  satelite
+  "rgb(30, 60, 150)",
+  "rgb(60, 120, 200)",
+  "rgb(100, 160, 180)",
+  "rgb(140, 200, 150)",
+  "rgb(180, 230, 120)",
+  "rgb(220, 210, 80)",
+  "rgb(240, 170, 50)",
+  "rgb(240, 120, 30)"
 
+ */
   getPointDistanceFromBounds(bounds) {
     return calculateOptimalPointDistance(bounds, this.options.maxGridPoints);
   }
@@ -87,20 +133,46 @@ export class MapManager {
   }
 
   getTemperatureAt(lat, lng) {
-    const { grid, dx, dy, nx, ny } = this.currentGrid;
+    const { gridPointsMap, dx, dy, nx, ny, bounds } = this.currentGrid;
   
-    // Encontrar los índices de la celda
-    const i = Math.floor((this.currentGrid.bounds.northWest.lat - lat) / dy);
-    const j = Math.floor((lng - this.currentGrid.bounds.southWest.lng) / dx);
+    const latNW = bounds.northWest.lat;
+    const lonSW = bounds.southWest.lng;
+  
+    // Determinamos los índices de la celda en la cuadrícula
+    const i = Math.floor((latNW - lat) / dy);
+    const j = Math.floor((lng - lonSW) / dx);
   
     if (i < 0 || i >= ny - 1 || j < 0 || j >= nx - 1) {
       throw new Error('Coordenadas fuera de los límites de la cuadrícula');
     }
   
-    const p1 = grid[i * nx + j];            // inferior izquierda (Q11)
-    const p2 = grid[i * nx + (j + 1)];      // inferior derecha (Q21)
-    const p3 = grid[(i + 1) * nx + j];      // superior izquierda (Q12)
-    const p4 = grid[(i + 1) * nx + (j + 1)];// superior derecha (Q22)
+    // Calculamos las coordenadas de los 4 puntos de la celda:
+    // p1: esquina superior izquierda ([i, j])
+    const lat_p1 = latNW - i * dy;
+    const lng_p1 = lonSW + j * dx;
+
+    // p2: esquina superior derecha ([i, j+1])
+    const lat_p2 = latNW - i * dy;
+    const lng_p2 = lonSW + (j + 1) * dx;
+
+    // p3: esquina inferior izquierda ([i+1, j])
+    const lat_p3 = latNW - (i + 1) * dy;
+    const lng_p3 = lonSW + j * dx;
+
+    // p4: esquina inferior derecha ([i+1, j+1])
+    const lat_p4 = latNW - (i + 1) * dy;
+    const lng_p4 = lonSW + (j + 1) * dx;
+
+    // Se extraen los puntos del diccionario
+    const p1 = gridPointsMap.get(generatePointKey(lat_p1, lng_p1));//this.showWeatherPopup(lat_p1, lng_p1);
+    const p2 = gridPointsMap.get(generatePointKey(lat_p2, lng_p2));//this.showWeatherPopup(lat_p2, lng_p2);
+    const p3 = gridPointsMap.get(generatePointKey(lat_p3, lng_p3));//this.showWeatherPopup(lat_p3, lng_p3);
+    const p4 = gridPointsMap.get(generatePointKey(lat_p4, lng_p4));//this.showWeatherPopup(lat_p4, lng_p4);
+
+    if (!p1 || !p2 || !p3 || !p4) {
+      throw new Error('No se encontraron todos los puntos de la cuadrícula para la interpolación');
+    }
+
     console.log("p1", p1, "p2", p2, "p3", p3, "p4", p4);
 
     // Coordenadas para la interpolación
@@ -200,34 +272,52 @@ export class MapManager {
       }
     });
     */
-    this.map.on('zoomend moveend', async () => {
+    this.map.on('moveend', async () => {
+      // Vamos a comprobar si seguimos dentro de los bounds de la cuadrícula
       var mapBounds = this.map.getBounds();
       const gridBounds = L.latLngBounds(this.currentGrid.bounds.southWest, this.currentGrid.bounds.northEast);
-        // Comprobamos que ambos extremos, el noreste y el suroeste, estén contenidos en areaBounds.
-        if (  gridBounds.contains(mapBounds.getNorthEast()) &&
-              gridBounds.contains(mapBounds.getSouthWest()) ) {
-          console.log("El área visible del mapa ESTÁ completamente dentro del área definida.");
-        } else {
-          console.log("El área visible del mapa NO está completamente dentro del área definida.");
-          // obtener los puntos que faltan
-          const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-          console.log("mapBounds", mapBounds);
-          console.log(this.map.getBounds());
-          // construir los bounds como si fuesen de leaflet
-          const bounds = L.latLngBounds(mapBounds.southWest, mapBounds.northEast);
-          console.log("bounds", bounds);
-          const pointDistance = this.getPointDistanceFromBounds(bounds);
-          console.log("pointDistance", pointDistance);
-          /*
-          const missingPoints = getNewGridPoints(this.currentGrid, mapBounds, pointDistance, pointDistance);
-          console.log("Nuevos puntos:", missingPoints);
-          console.log("Puntos existentes:", this.currentGrid.grid);
-          // Actualizar la cuadricula con los datos nuevos, pero que estén ordenados de noroeste a sureste
-          // POR IMPLEMENTAR
-          */
-          this.currentGrid = gridBuilder(this.map, pointDistance, mapBounds);
-          await this.updateWindData();
-        }
+      if (  gridBounds.contains(mapBounds.getNorthEast()) &&
+            gridBounds.contains(mapBounds.getSouthWest()) ) {
+        console.log("El área visible del mapa ESTÁ completamente dentro del área definida.");
+      } else {
+        console.log("El área visible del mapa NO está completamente dentro del área definida.");
+        mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
+        this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds, this.currentGrid.gridPointsMap);
+        await this.updateWindData();
+      }
+    });
+
+    let lastZoom = this.map.getZoom();
+    this.map.on('zoomend', async () => {
+
+      let currentZoom = this.map.getZoom();
+      // Comparar el nivel de zoom actual con el anterior
+      if (currentZoom > lastZoom) {
+        console.log('Se ha realizado un zoom in');
+        // Lógica para manejar el zoom in
+      } else if (currentZoom < lastZoom) {
+        console.log('Se ha realizado un zoom out');
+        // Lógica para manejar el zoom out
+      } else {
+        console.log('El nivel de zoom no ha cambiado');
+      }
+
+      var mapBounds = this.map.getBounds();
+      const gridBounds = L.latLngBounds(this.currentGrid.bounds.southWest, this.currentGrid.bounds.northEast);
+      // Comprobamos que ambos extremos, el noreste y el suroeste, estén contenidos en areaBounds.
+      if (  gridBounds.contains(mapBounds.getNorthEast()) &&
+            gridBounds.contains(mapBounds.getSouthWest()) ) {
+        console.log("El área visible del mapa ESTÁ completamente dentro del área definida.");
+      } else {
+        console.log("El área visible del mapa NO está completamente dentro del área definida.");
+        // obtener los puntos que faltan
+        mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
+        console.log(this.map.getBounds());
+        const bounds = L.latLngBounds(mapBounds.southWest, mapBounds.northEast);
+        this.options.pointDistance = this.getPointDistanceFromBounds(bounds);console.log("pointDistance", pointDistance);
+        this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds, this.currentGrid.gridPointsMap);
+        await this.updateWindData();
+      }
     });
 
     this.map.on('click', (e) => {
@@ -452,6 +542,43 @@ export class MapManager {
 
     return this.forceUpdate();
   }
+
+  showWeatherPopup(lat, lng) {
+    // Genera la clave para buscar el objeto en gridPointsMap
+    const pointKey = generatePointKey(lat, lng);
+    
+    // Busca el gridPoint en el diccionario
+    const gridPoint = this.currentGrid.gridPointsMap.get(pointKey);
+    
+    if (!gridPoint) {
+      console.error("No se encontró información meteorológica para la coordenada dada.");
+      return;
+    }
+    
+    // Extraer los datos meteorológicos del objeto
+    const { temperature, wind, timestamp } = gridPoint.weatherData;
+    
+    // Construir el contenido HTML para el popup
+    const popupContent = `
+      <div>
+        <h4>Datos Meteorológicos</h4>
+        <p><strong>Coordenadas:</strong> Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}</p>
+        <p><strong>Temperatura:</strong> ${temperature !== null ? temperature + ' °C' : 'No disponible'}</p>
+        <p><strong>Viento:</strong> ${wind.speed !== null ? wind.speed + ' m/s' : 'No disponible'} 
+           ${wind.direction !== null ? ' - ' + wind.direction + '°' : ''}</p>
+        ${timestamp ? `<p><strong>Actualizado:</strong> ${new Date(timestamp).toLocaleString()}</p>` : ''}
+      </div>
+    `;
+    
+    // Crear y abrir el popup en el mapa
+    L.popup({
+      closeOnClick: false, // Evita que se cierre al hacer clic en el mapa
+      autoClose: false,    // Permite mantener abierto el popup)
+    }).setLatLng([lat, lng])
+      .setContent(popupContent)
+      .openOn(this.map);
+  }
+  
 }
 
 class GridPoint {
@@ -600,6 +727,7 @@ function calculateOptimalPointDistance(bounds, maxPoints = 150) {
       console.log(`Selected point distance: ${distance}° (${nx}x${ny}=${totalPoints} points)`);
       return distance;
     }
+    console.log(`Distance ${distance}° would exceed maxPoints (${totalPoints} > ${maxPoints})`);
   }
 
   // If all distances would exceed maxPoints, return the largest distance
@@ -609,7 +737,7 @@ function calculateOptimalPointDistance(bounds, maxPoints = 150) {
 
 // Obtener las coordenadas de los límites del mapa que sean multiplos de MULTIPLE
 function getMapBoundsCoordinates(map, adjustment = 0) {
-  const MULTIPLE = 0.25;
+  const MULTIPLE = 0.5;
   const bounds =  map.getBounds();
   const southWest = bounds.getSouthWest();                  //L.marker(southWest).addTo(map);
   const northEast = bounds.getNorthEast();                  //L.marker(northEast).addTo(map);
@@ -663,9 +791,38 @@ function heatmapDataBuilder(grid){
 
 // Logica para construir el json para usar con leaflet-velocity
 function windyDataBuilder(Grid, options) {
-  const { bounds, grid, dx, dy, nx, ny } = Grid;
+  const { bounds, dx, dy, nx, ny, gridPointsMap } = Grid;
+  const { northEast, northWest, southEast, southWest } = bounds;
   const dateType = options.dateType;
   const hour_index = options.hour_index;
+  
+  let latMin = southWest.lat;
+  let latMax = northWest.lat;
+  let lonMin = southWest.lng;
+  let lonMax = southEast.lng;
+  
+  let grid = [];
+  
+  // Recorremos las filas desde el norte hacia el sur
+  for (let j = 0; j < ny; j++) {
+    // Comenzamos desde la latitud máxima y vamos descendiendo
+    let latitude = latMax - j * dy;
+    
+    // Dentro de cada fila, de oeste a este
+    for (let i = 0; i < nx; i++) {
+      let longitude = lonMin + i * dx;
+      
+      // Validamos que el punto esté dentro de los límites
+      if (latitude < latMin || longitude > lonMax) continue;
+      
+      const pointKey = generatePointKey(latitude, longitude);
+      if(gridPointsMap.has(pointKey)) console.log("windyDataBuilder");
+      let gridPoint = gridPointsMap.has(pointKey)
+        ? gridPointsMap.get(pointKey)
+        : new GridPoint(latitude, longitude);
+      grid.push(gridPoint);
+    }
+  }
 
   var u_component = [], v_component = [];
   for (let i = 0; i < grid.length; i++) { // grid.length should be equal to nx * ny
@@ -959,14 +1116,11 @@ function calculateGridParameters(bounds, pointDistance=0.0625) {
   return { nx, ny, dx, dy };
 }
 
-function gridBuilder(map, pointDistance, gridLimits) {
-  console.log("northWest", gridLimits.northWest); L.marker(gridLimits.northWest).addTo(map);
-  console.log("northEast", gridLimits.northEast); L.marker(gridLimits.northEast).addTo(map);
-  console.log("southWest", gridLimits.southWest); L.marker(gridLimits.southWest).addTo(map);
-  console.log("southEast", gridLimits.southEast); L.marker(gridLimits.southEast).addTo(map);
-
-  // Mapa de GridPoints
-  const gridPointsMap = new Map();
+function gridBuilder(map, pointDistance, gridLimits, gridPointsMap) {
+  console.log("northWest", gridLimits.northWest); L.marker(gridLimits.northWest).addTo(map).bindPopup("northWest<br>" + gridLimits.northWest.lat + ", " + gridLimits.northWest.lng);
+  console.log("northEast", gridLimits.northEast); L.marker(gridLimits.northEast).addTo(map).bindPopup("northEast<br>" + gridLimits.northEast.lat + ", " + gridLimits.northEast.lng);
+  console.log("southWest", gridLimits.southWest); L.marker(gridLimits.southWest).addTo(map).bindPopup("southWest<br>" + gridLimits.southWest.lat + ", " + gridLimits.southWest.lng);
+  console.log("southEast", gridLimits.southEast); L.marker(gridLimits.southEast).addTo(map).bindPopup("southEast<br>" + gridLimits.southEast.lat + ", " + gridLimits.southEast.lng);
 
   // Datos para la cuadricula
   const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
@@ -974,15 +1128,25 @@ function gridBuilder(map, pointDistance, gridLimits) {
 
   // Generar las coordenadas de los puntos
   const points = [];
+  let count = 0, count1 = 0;
+  console.log(gridPointsMap)
   for (let i = 0; i < ny; i++) {
     const latitude = gridLimits.northWest.lat - i * dy;
     for (let j = 0; j < nx; j++) {
       const longitude = gridLimits.northWest.lng + j * dx;
-      const gp = new GridPoint(latitude, longitude);
-      points.push(gp);
-      gridPointsMap.set(gp.id, gp);
+      const pointKey = generatePointKey(latitude, longitude);
+      let gp = gridPointsMap.get(pointKey);
+      if (!gp) {
+        gp = new GridPoint(latitude, longitude);
+        gridPointsMap.set(pointKey, gp);
+        points.push(gp);
+        count++;
+      }
+      count1++;
     }
   }
+  console.log("Puntos generados:", count);
+  console.log("Puntos obviados:", count1 - count);
 
   return {
     bounds: gridLimits,
@@ -1047,6 +1211,7 @@ function DrawWindData({ map, layerControl, velocityLayer = null, windyData, wind
     });
 
     layerControl.addOverlay(velocityLayer, "API Wind Data"); // Añadir la capa
+    velocityLayer.setOptions(windyParameters);
     velocityLayer.addTo(map); // Mostrar la capa
     map.addLayer(velocityLayer); // Añadirla al campo de control
   }
