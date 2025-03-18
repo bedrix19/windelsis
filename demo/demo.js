@@ -6,10 +6,11 @@ import { MapManager } from "../src/js/mapManager.js";
  * Vigo: 42.2406, -8.7207
  * SdC: 42.8769, -8.5442
  * Pamplona: 42.8169, -1.6458
+ * Lisboa: 38.7223, -9.1393
  */
 let mapManager = new MapManager('map', {
-  center: [42.8769, -8.5442],
-  zoom: 9,
+  center: [42.8169, -1.6458],
+  zoom: 11,
   updateDelay: 500,
 });
 

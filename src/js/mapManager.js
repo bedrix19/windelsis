@@ -1,4 +1,5 @@
 import { parseOpenMeteo, parseMeteoSIX } from "./apiService.js";
+import TemperatureRenderer from './TemperatureRenderer.js';
 
 export class MapManager {
   constructor(mapId, options = {}) {
@@ -19,14 +20,14 @@ export class MapManager {
       ny: null
     };
     this.options = {
-      randomData: options.randomData || true,
+      randomData: options.randomData || false,
       center: options.center || [42.8, -8],
       zoom: options.zoom || 8,
       minZoom: options.minZoom || 3,
       maxZoom: options.maxZoom || 18,
       updateDelay: options.updateDelay || 500,
       pointDistance:  options.pointDistance || null,
-      maxGridPoints: options.maxGridPoints || 1000,
+      maxGridPoints: options.maxGridPoints || 600,
       mapAdjustment: options.mapAdjustment || 0,
       windyParameters: this.getDefaultWindyParameters(),
       dateType: options.dateType || 'current',
@@ -50,13 +51,16 @@ export class MapManager {
     
     // Setup grid parameters
     const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-    const bounds = L.latLngBounds(mapBounds.southWest, mapBounds.northEast);
     this.options.pointDistance =  this.options.pointDistance !== null
                                   ? this.options.pointDistance
-                                  : this.getPointDistanceFromBounds(bounds);
+                                  : this.getPointDistanceFromBounds(mapBounds);
     this.currentGrid.gridPointsMap = new Map();
     this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds, this.currentGrid.gridPointsMap);
     console.log("currentGrid", this.currentGrid);
+
+    // Initialize weather layers
+    this.initializeTemperatureLayer();
+    this.initializeWindLayer();
 
     // Initialize event handlers
     this.initializeEventHandlers();
@@ -73,56 +77,24 @@ export class MapManager {
       particleMultiplier: 1/300,
       frameRate: 15,
       colorScale: [
-        "rgb(0, 0, 128)",    // Baja intensidad: azul marino, muy visible sobre fondo natural.
-        "rgb(0, 0, 255)",    // Intensidad moderada: azul vibrante.
-        "rgb(75, 0, 130)",   // Transición: índigo.
-        "rgb(138, 43, 226)", // Avanzando hacia tonos fríos: azul violeta.
-        "rgb(255, 0, 255)",  // Punto medio: magenta, muy contrastante.
-        "rgb(255, 0, 200)",  // Intensificación: magenta brillante.
-        "rgb(255, 0, 150)",  // Más cerca del rango cálido: tono rojizo.
-        "rgb(255, 0, 100)",  // Intensidad alta: naranja fuerte.
-        "rgb(255, 0, 50)",   // Casi al máximo: rojo intenso.
-        "rgb(255, 0, 0)"     // Máxima intensidad: rojo puro.
+        "rgb(0, 0, 128)",
+        "rgb(0, 0, 255)",
+        "rgb(75, 0, 130)",
+        "rgb(138, 43, 226)",
+        "rgb(255, 0, 255)",
+        "rgb(255, 0, 200)",
+        "rgb(255, 0, 150)",
+        "rgb(255, 0, 100)",
+        "rgb(255, 0, 50)", 
+        "rgb(255, 0, 0)"   
 ]
     };
   }
-/**
- * blanco
-  "rgb(12, 44, 132)",
-  "rgb(49, 130, 189)",
-  "rgb(107, 174, 214)",
-  "rgb(189, 215, 231)",
-  "rgb(254, 224, 139)",
-  "rgb(253, 174, 97)",
-  "rgb(244, 109, 67)",
-  "rgb(215, 48, 39)",
-  "rgb(165, 0, 38)"
-  negro
-  "rgb(0, 255, 255)",
-  "rgb(51, 255, 204)",
-  "rgb(102, 255, 153)",
-  "rgb(153, 255, 102)",
-  "rgb(204, 255, 51)",
-  "rgb(255, 255, 0)",
-  "rgb(255, 204, 51)",
-  "rgb(255, 153, 102)",
-  "rgb(255, 102, 153)",
-  "rgb(255, 51, 204)",
-  "rgb(255, 0, 255)"
-  satelite
-  "rgb(30, 60, 150)",
-  "rgb(60, 120, 200)",
-  "rgb(100, 160, 180)",
-  "rgb(140, 200, 150)",
-  "rgb(180, 230, 120)",
-  "rgb(220, 210, 80)",
-  "rgb(240, 170, 50)",
-  "rgb(240, 120, 30)"
 
- */
   getPointDistanceFromBounds(bounds) {
     return calculateOptimalPointDistance(bounds, this.options.maxGridPoints);
   }
+
   getPointDistanceFromZoom(zoom) {
     console.log("getPointDistanceFromZoom", zoom);
     if (zoom <= 7) return 1;
@@ -135,8 +107,8 @@ export class MapManager {
   getTemperatureAt(lat, lng) {
     const { gridPointsMap, dx, dy, nx, ny, bounds } = this.currentGrid;
   
-    const latNW = bounds.northWest.lat;
-    const lonSW = bounds.southWest.lng;
+    const latNW = bounds.getNorthWest().lat;
+    const lonSW = bounds.getSouthWest().lng;
   
     // Determinamos los índices de la celda en la cuadrícula
     const i = Math.floor((latNW - lat) / dy);
@@ -247,80 +219,61 @@ export class MapManager {
     this.currentGrid = null;
   }
 
+  debounce(func, delay) {
+    let timer;
+    return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => func.apply(this, args), delay);
+    };
+  }
+
   initializeEventHandlers() {
     console.log("######## initializeEventHandlers ########");
-    /*Estas lineas hacen que el mapa funcione mal
-    const debouncedUpdate = this.debounce(() => {
-        this.updateWindData();
-      }, this.options.updateDelay
-    );
+    const map = this.map;
 
-    // Zoom events with grid management
-    this.map.on('zoomend', () => {
-      const currentZoom = this.map.getZoom();
-      if (this.lastZoom !== currentZoom) {
-        this.pointDistance = this.getPointDistanceFromZoom(currentZoom);
-        //debouncedUpdate();
-      }
-      this.lastZoom = currentZoom;
-    });
+    const handleMoveEnd = this.debounce(() => {
+      console.log("Procesando 'moveend'...");
 
-    // Pan events
-    this.map.on('moveend', () => {
-      if (!this.map.isZooming()) {
-        //debouncedUpdate();
-      }
-    });
-    */
-    this.map.on('moveend', async () => {
-      // Vamos a comprobar si seguimos dentro de los bounds de la cuadrícula
-      var mapBounds = this.map.getBounds();
-      const gridBounds = L.latLngBounds(this.currentGrid.bounds.southWest, this.currentGrid.bounds.northEast);
-      if (  gridBounds.contains(mapBounds.getNorthEast()) &&
-            gridBounds.contains(mapBounds.getSouthWest()) ) {
-        console.log("El área visible del mapa ESTÁ completamente dentro del área definida.");
-      } else {
+      var mapBounds = map.getBounds();
+      const gridBounds = this.currentGrid.bounds;
+      const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
+
+      if (!isInside) {
         console.log("El área visible del mapa NO está completamente dentro del área definida.");
-        mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-        this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds, this.currentGrid.gridPointsMap);
+        const dataBounds = getMapBoundsCoordinates(map, this.options.mapAdjustment);
+        this.currentGrid = gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap);
+        this.forceUpdate();
+      }
+    }, 300);
+
+    const handleZoomEnd = this.debounce(async () => {
+      console.log("Procesando 'zoomend'...");
+
+      const mapBounds = map.getBounds();
+      console.log("mapBounds", mapBounds);
+
+      const gridBounds = this.currentGrid.bounds;
+      const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
+
+      const dataBounds = getMapBoundsCoordinates(map, this.options.mapAdjustment);
+      console.log("dataBounds", dataBounds);
+
+      const pointDistance = this.getPointDistanceFromBounds(dataBounds);
+      console.log("pointDistance", pointDistance);
+
+      const pointChanged = pointDistance !== this.options.pointDistance;
+      if (!isInside || pointChanged) {
+        console.log("El área visible del mapa NO está completamente dentro del área definida.");
+        this.options.pointDistance = pointDistance;
+        this.currentGrid = gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap);
         await this.updateWindData();
       }
-    });
+    }, 300);
 
-    let lastZoom = this.map.getZoom();
-    this.map.on('zoomend', async () => {
+    map.on('moveend', handleMoveEnd);
+    map.on('zoomend', handleZoomEnd);
 
-      let currentZoom = this.map.getZoom();
-      // Comparar el nivel de zoom actual con el anterior
-      if (currentZoom > lastZoom) {
-        console.log('Se ha realizado un zoom in');
-        // Lógica para manejar el zoom in
-      } else if (currentZoom < lastZoom) {
-        console.log('Se ha realizado un zoom out');
-        // Lógica para manejar el zoom out
-      } else {
-        console.log('El nivel de zoom no ha cambiado');
-      }
-
-      var mapBounds = this.map.getBounds();
-      const gridBounds = L.latLngBounds(this.currentGrid.bounds.southWest, this.currentGrid.bounds.northEast);
-      // Comprobamos que ambos extremos, el noreste y el suroeste, estén contenidos en areaBounds.
-      if (  gridBounds.contains(mapBounds.getNorthEast()) &&
-            gridBounds.contains(mapBounds.getSouthWest()) ) {
-        console.log("El área visible del mapa ESTÁ completamente dentro del área definida.");
-      } else {
-        console.log("El área visible del mapa NO está completamente dentro del área definida.");
-        // obtener los puntos que faltan
-        mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-        console.log(this.map.getBounds());
-        const bounds = L.latLngBounds(mapBounds.southWest, mapBounds.northEast);
-        this.options.pointDistance = this.getPointDistanceFromBounds(bounds);console.log("pointDistance", pointDistance);
-        this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds, this.currentGrid.gridPointsMap);
-        await this.updateWindData();
-      }
-    });
-
-    this.map.on('click', (e) => {
+    map.on('click', (e) => {
       var lat = e.latlng.lat;
       var lng = e.latlng.lng;
     
@@ -350,8 +303,22 @@ export class MapManager {
       })
       .setLatLng(e.latlng)
       .setContent('<b>Coordenadas:</b><br>Lat: ' + lat.toFixed(5) + '<br>Lng: ' + lng.toFixed(5) + '<br><b>Temperatura:</b> ' + this.getTemperatureAt(lat, lng).toFixed(2) + '°C')
-      .openOn(this.map);
+      .openOn(map);
     });
+  }
+
+  initializeTemperatureLayer() {
+    console.log("######## initializeTemperatureLayer ########");
+    this.temperatureRenderer = new TemperatureRenderer(this.map, this.currentGrid.gridPointsMap, {
+      pixelSize: 2,
+      opacity: 0.8,
+      controlName: "Temperature Heatmap"
+    });
+    this.temperatureRenderer.render();
+  }
+
+  initializeWindLayer() {
+    console.log("######## initializeWindLayer ########");
   }
 
   forceUpdate() {
@@ -359,18 +326,6 @@ export class MapManager {
       this.updateTemperatureData();
     });
   }
-
-  debounce(func, wait) {
-      return () => {
-        if (this.updateTimeout) {
-          clearTimeout(this.updateTimeout);
-        }
-        this.updateTimeout = setTimeout(() => {
-          func.apply(this);
-        }, wait);
-      };
-  }
-
 
   async updateWeatherData(){
     // Logica para actualizar la grilla de datos meteorológicos
@@ -424,62 +379,16 @@ export class MapManager {
     this.isUpdating = true;
 
     try {
-      //const mapBounds = getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-      const oldGrid = this.currentGrid.grid;
-      //const pointDistance = this.options.pointDistance;
+      console.log("Primera carga de datos");
+      await fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
 
-      if (false) {
-        this.currentGrid = gridBuilder(this.map, this.options.pointDistance, this.options.mapAdjustment);
-        console.log("oldGrid.windData", this.currentGrid);
-        this.currentGrid.windData = await fetchWeatherData(this.currentGrid, this.options);
-
-        this.velocityLayer = DrawWindData({
-          map: this.map,
-          layerControl: this.layerControl,
-          velocityLayer: this.velocityLayer,
-          windyParameters: this.options.windyParameters,
-          windyData: windyDataBuilder(this.currentGrid, this.options)
-        });
-        /*
-        //Generar nuevos puntos que no estaban en la cuadrícula anterior
-        const { latitudes, longitudes } = getNewGridPoints(oldGrid.bounds, mapBounds, pointDistance, pointDistance);
-
-        if (latitudes.length === 0 && longitudes.length === 0) {
-          console.log("No hay nuevos puntos, evitando petición innecesaria.");
-          this.isUpdating = false;
-          return;
-        }
-
-        //Hacer petición solo para los nuevos puntos
-        const newData = await fetchWeatherData(latitudes, longitudes, latitudes.length, longitudes.length, this.options.dateType);
-
-        //Fusionar los datos nuevos con los existentes
-        this.currentGrid.windData = mergeWindData(this.currentGrid.windData, newData, oldGrid.bounds, mapBounds);
-        this.currentGrid.bounds = mapBounds;
-
-        //Actualizar capa sin reemplazarla completamente
-        if (this.velocityLayer) {
-          this.velocityLayer.setData(this.currentGrid.windData);
-        } else {
-          this.velocityLayer = L.velocityLayer({
-            displayValues: true,
-            data: this.currentGrid.windData,
-            maxVelocity: this.options.windyParameters.maxVelocity,
-          }).addTo(this.map);
-        }
-        */
-      }else{
-        console.log("Primera carga de datos");
-        await fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
-
-        this.velocityLayer = DrawWindData({
-          map: this.map,
-          layerControl: this.layerControl,
-          velocityLayer: this.velocityLayer,
-          windyParameters: this.options.windyParameters,
-          windyData: windyDataBuilder(this.currentGrid, this.options)
-        });
-      }
+      this.velocityLayer = DrawWindData({
+        map: this.map,
+        layerControl: this.layerControl,
+        velocityLayer: this.velocityLayer,
+        windyParameters: this.options.windyParameters,
+        windyData: windyDataBuilder(this.currentGrid, this.options)
+      });
     } catch (error) {
       console.error('Error updating wind data:', error);
     } finally {
@@ -738,13 +647,12 @@ function calculateOptimalPointDistance(bounds, maxPoints = 150) {
 // Obtener las coordenadas de los límites del mapa que sean multiplos de MULTIPLE
 function getMapBoundsCoordinates(map, adjustment = 0) {
   const MULTIPLE = 0.5;
-  const bounds =  map.getBounds();
-  const southWest = bounds.getSouthWest();                  //L.marker(southWest).addTo(map);
-  const northEast = bounds.getNorthEast();                  //L.marker(northEast).addTo(map);
-  const northWest = L.latLng(northEast.lat, southWest.lng); //L.marker(northWest).addTo(map);
-  const southEast = L.latLng(southWest.lat, northEast.lng); //L.marker(southEast).addTo(map);
+  const bounds = map.getBounds();
+  var southWest = bounds.getSouthWest();
+  var northEast = bounds.getNorthEast();
 
-  console.log("Puntos de los límites del mapa\nNW:", northWest," NE:", northEast," SW:", southWest," SE:", southEast);
+  console.log("Puntos de los límites del mapa\nNW:", L.latLng(northEast.lat, southWest.lng), " NE:", northEast,
+              " SW:", southWest, " SE:", L.latLng(southWest.lat, northEast.lng));
 
   function roundToMultiple(value, multiple, roundUp) {
     return roundUp
@@ -752,24 +660,16 @@ function getMapBoundsCoordinates(map, adjustment = 0) {
       : Math.floor(value / multiple) * multiple;
   }
 
-  return {
-    northWest: L.latLng(
-      roundToMultiple(northWest.lat, MULTIPLE, true) + adjustment,
-      roundToMultiple(northWest.lng, MULTIPLE, false) - adjustment
-    ),
-    northEast: L.latLng(
-      roundToMultiple(northEast.lat, MULTIPLE, true) + adjustment,
-      roundToMultiple(northEast.lng, MULTIPLE, true) + adjustment
-    ),
-    southWest: L.latLng(
-      roundToMultiple(southWest.lat, MULTIPLE, false) - adjustment,
-      roundToMultiple(southWest.lng, MULTIPLE, false) - adjustment
-    ),
-    southEast: L.latLng(
-      roundToMultiple(southEast.lat, MULTIPLE, false) - adjustment,
-      roundToMultiple(southEast.lng, MULTIPLE, true) + adjustment
-    )
-  };
+  southWest = L.latLng(
+    roundToMultiple(southWest.lat, MULTIPLE, false) - adjustment,
+    roundToMultiple(southWest.lng, MULTIPLE, false) - adjustment
+  );
+  northEast = L.latLng(
+    roundToMultiple(northEast.lat, MULTIPLE, true) + adjustment,
+    roundToMultiple(northEast.lng, MULTIPLE, true) + adjustment
+  );
+
+  return L.latLngBounds(southWest, northEast)
 }
 
 // Logica para contrsuir el array para heatmap
@@ -792,14 +692,13 @@ function heatmapDataBuilder(grid){
 // Logica para construir el json para usar con leaflet-velocity
 function windyDataBuilder(Grid, options) {
   const { bounds, dx, dy, nx, ny, gridPointsMap } = Grid;
-  const { northEast, northWest, southEast, southWest } = bounds;
   const dateType = options.dateType;
   const hour_index = options.hour_index;
   
-  let latMin = southWest.lat;
-  let latMax = northWest.lat;
-  let lonMin = southWest.lng;
-  let lonMax = southEast.lng;
+  let latMin = bounds.getSouthWest().lat;
+  let latMax = bounds.getNorthWest().lat;
+  let lonMin = bounds.getSouthWest().lng;
+  let lonMax = bounds.getSouthEast().lng;
   
   let grid = [];
   
@@ -816,7 +715,7 @@ function windyDataBuilder(Grid, options) {
       if (latitude < latMin || longitude > lonMax) continue;
       
       const pointKey = generatePointKey(latitude, longitude);
-      if(gridPointsMap.has(pointKey)) console.log("windyDataBuilder");
+      if(gridPointsMap.has(pointKey)) console.log("Punto encontrado");
       let gridPoint = gridPointsMap.has(pointKey)
         ? gridPointsMap.get(pointKey)
         : new GridPoint(latitude, longitude);
@@ -884,10 +783,10 @@ function windyDataBuilder(Grid, options) {
         parameterNumberName: "eastward_wind",
         parameterCategory: 2,
         parameterNumber: 2,
-        lo1: bounds.northWest.lng,
-        lo2: bounds.southEast.lng,
-        la1: bounds.northWest.lat,
-        la2: bounds.southEast.lat,
+        lo1: bounds.getNorthWest().lng,
+        lo2: bounds.getSouthEast().lng,
+        la1: bounds.getNorthWest().lat,
+        la2: bounds.getSouthEast().lat,
         nx: nx,
         ny: ny,
         dx: dx,
@@ -901,10 +800,10 @@ function windyDataBuilder(Grid, options) {
         parameterNumberName: "northward_wind",
         parameterCategory: 2,
         parameterNumber: 3,
-        lo1: bounds.northWest.lng,
-        lo2: bounds.southEast.lng,
-        la1: bounds.northWest.lat,
-        la2: bounds.southEast.lat,
+        lo1: bounds.getNorthWest().lng,
+        lo2: bounds.getSouthEast().lng,
+        la1: bounds.getNorthWest().lat,
+        la2: bounds.getSouthEast().lat,
         nx: nx,
         ny: ny,
         dx: dx,
@@ -1027,8 +926,6 @@ async function fetchWeatherData(grid, options, API = 'OpenMeteo') {
 
     if (API === 'OpenMeteo') setDataFromOpenMeteo(results, points, pointsLookup, options.dateType);
     else if (API === 'MeteoSIX') setDataFromMeteoSIX(results, points, nx);
-
-    return points;
   } catch (error) {
     console.error('Fetching weather data failed:', error);
     throw error;
@@ -1092,8 +989,8 @@ function initializeWindLayer(map, windData) {
 
 // Calcular nx, ny, dx y dy
 function calculateGridParameters(bounds, pointDistance=0.0625) {
-  const lonRange = Math.abs(bounds.northEast.lng - bounds.southWest.lng);
-  const latRange = Math.abs(bounds.northEast.lat - bounds.southWest.lat);
+  const lonRange = Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
+  const latRange = Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat);
   console.log("lonRange", lonRange, "latRange", latRange);
 
   let auxDistance = 0;
@@ -1116,11 +1013,11 @@ function calculateGridParameters(bounds, pointDistance=0.0625) {
   return { nx, ny, dx, dy };
 }
 
-function gridBuilder(map, pointDistance, gridLimits, gridPointsMap) {
-  console.log("northWest", gridLimits.northWest); L.marker(gridLimits.northWest).addTo(map).bindPopup("northWest<br>" + gridLimits.northWest.lat + ", " + gridLimits.northWest.lng);
-  console.log("northEast", gridLimits.northEast); L.marker(gridLimits.northEast).addTo(map).bindPopup("northEast<br>" + gridLimits.northEast.lat + ", " + gridLimits.northEast.lng);
-  console.log("southWest", gridLimits.southWest); L.marker(gridLimits.southWest).addTo(map).bindPopup("southWest<br>" + gridLimits.southWest.lat + ", " + gridLimits.southWest.lng);
-  console.log("southEast", gridLimits.southEast); L.marker(gridLimits.southEast).addTo(map).bindPopup("southEast<br>" + gridLimits.southEast.lat + ", " + gridLimits.southEast.lng);
+function gridBuilder(map, pointDistance, gridLimits, gridPointsMap) {//gridLimits=mapBounds => _northEast y _southWest
+  console.log("northWest", gridLimits.getNorthWest()); L.marker(gridLimits.getNorthWest()).addTo(map);
+  console.log("northEast", gridLimits.getNorthEast()); L.marker(gridLimits.getNorthEast()).addTo(map);
+  console.log("southWest", gridLimits.getSouthWest()); L.marker(gridLimits.getSouthWest()).addTo(map);
+  console.log("southEast", gridLimits.getSouthEast()); L.marker(gridLimits.getSouthEast()).addTo(map);
 
   // Datos para la cuadricula
   const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
@@ -1131,9 +1028,9 @@ function gridBuilder(map, pointDistance, gridLimits, gridPointsMap) {
   let count = 0, count1 = 0;
   console.log(gridPointsMap)
   for (let i = 0; i < ny; i++) {
-    const latitude = gridLimits.northWest.lat - i * dy;
+    const latitude = gridLimits.getNorthWest().lat - i * dy;
     for (let j = 0; j < nx; j++) {
-      const longitude = gridLimits.northWest.lng + j * dx;
+      const longitude = gridLimits.getNorthWest().lng + j * dx;
       const pointKey = generatePointKey(latitude, longitude);
       let gp = gridPointsMap.get(pointKey);
       if (!gp) {
@@ -1157,34 +1054,6 @@ function gridBuilder(map, pointDistance, gridLimits, gridPointsMap) {
     nx: nx,
     ny: ny,
   }
-}
-
-// Primera implementación, pero solo sirve para hallar '4 rectas', no para el resto
-function getNewGridPoints(oldGrid, newBounds, dx, dy) {
-  const newPoints = [];
-
-  // Crear un set para almacenar las claves de los puntos existentes
-  const existingPoints = new Set();
-  oldGrid.grid.forEach(point => {
-    existingPoints.add(generatePointKey(point.latitude, point.longitude));
-  });
-
-  // Función para agregar nuevos puntos si no existen en el set
-  function addNewPoint(lat, lon) {
-    const key = generatePointKey(lat, lon);
-    if (!existingPoints.has(key)) {
-      newPoints.push(new GridPoint(lat, lon));
-    }
-  }
-
-  // Generar nuevos puntos de noroeste a sureste
-  for (let lat = newBounds.northWest.lat; lat >= newBounds.southEast.lat; lat -= dy) {
-    for (let lon = newBounds.northWest.lng; lon <= newBounds.southEast.lng; lon += dx) {
-      addNewPoint(lat, lon);
-    }
-  }
-
-  return newPoints;
 }
 
 function DrawWindData({ map, layerControl, velocityLayer = null, windyData, windyParameters = {} }) {
