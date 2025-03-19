@@ -20,7 +20,7 @@ export class MapManager {
       ny: null
     };
     this.options = {
-      randomData: options.randomData || false,
+      randomData: options.randomData || true,
       center: options.center || [42.8, -8],
       zoom: options.zoom || 8,
       minZoom: options.minZoom || 3,
@@ -266,7 +266,7 @@ export class MapManager {
         console.log("El área visible del mapa NO está completamente dentro del área definida.");
         this.options.pointDistance = pointDistance;
         this.currentGrid = gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap);
-        await this.updateWindData();
+        this.forceUpdate();
       }
     }, 300);
 
@@ -310,10 +310,12 @@ export class MapManager {
   initializeTemperatureLayer() {
     console.log("######## initializeTemperatureLayer ########");
     this.temperatureRenderer = new TemperatureRenderer(this.map, this.currentGrid.gridPointsMap, {
-      pixelSize: 2,
-      opacity: 0.8,
-      controlName: "Temperature Heatmap"
+      pixelSize: 3,
+      opacity: 0.7,
+      controlName: 'Temperatura',
+      layerControl: this.layerControl
     });
+  
     this.temperatureRenderer.render();
   }
 
@@ -332,45 +334,8 @@ export class MapManager {
   }
 
   async updateTemperatureData() {
-    console.log("######## updateTemperatureData ########");return
-    try {
-      // Remove existing heatmap layer if it exists
-      if (this.heatmapLayer) {
-        this.map.removeLayer(this.heatmapLayer);
-      }
-  
-      // Prepare data points for heat layer
-      const heatPoints = this.currentGrid.grid.map(point => {
-        return [
-          point.latitude,
-          point.longitude,
-          point.weatherData.temperature
-        ];
-      });
-  
-      // Configure heat layer
-      this.heatmapLayer = L.heatLayer(heatPoints, {
-        radius: 50,
-        blur: 15,
-        maxZoom: 18,
-        max: 40, // maximum temperature to normalize colors
-        minOpacity: 0.3,
-        gradient: {
-          0.0: 'blue',    // Cold temperatures
-          0.25: 'cyan',
-          0.5: 'lime',
-          0.75: 'yellow',
-          1.0: 'red'      // Hot temperatures
-        }
-      });
-  
-      // Add layer to map and layer control
-      this.layerControl.addOverlay(this.heatmapLayer, "Temperature Heatmap");
-      this.heatmapLayer.addTo(this.map);
-  
-    } catch(error) {
-      console.error('Error updating temperature data:', error);
-    }
+    console.log("######## updateTemperatureData ########");
+    this.temperatureRenderer.update(this.currentGrid.gridPointsMap);
   }
 
   async updateWindData(dateOptions = {}) {
@@ -429,11 +394,6 @@ export class MapManager {
     if (this.velocityLayer) {
         this.velocityLayer.setOptions(this.options.windyParameters);
     }
-  }
-
-  setPointDistance(distance) {
-    this.options.pointDistance = distance;
-    this.forceUpdate();
   }
 
   setDateType(dateType, options = {}) {
