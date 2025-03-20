@@ -6,6 +6,7 @@ export class MapManager {
     this.map = null;
     this.heatmapLayer = null;
     this.velocityLayer = null;
+    this.temperatureRenderer = null;
     this.layerControl = null;
     this.isUpdating = false;
     this.lastZoom = null;
@@ -19,6 +20,7 @@ export class MapManager {
       nx: null,
       ny: null
     };
+    this.gridCollection = null; // Para almacenar las cuadrículas de datos por tipo de fecha
     this.options = {
       randomData: options.randomData || true,
       center: options.center || [42.8, -8],
@@ -55,6 +57,7 @@ export class MapManager {
                                   ? this.options.pointDistance
                                   : this.getPointDistanceFromBounds(mapBounds);
     this.currentGrid.gridPointsMap = new Map();
+    this.currentGrid.gridCollection = new Map();
     this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds, this.currentGrid.gridPointsMap);
     console.log("currentGrid", this.currentGrid);
 
@@ -65,6 +68,8 @@ export class MapManager {
     // Initialize event handlers
     this.initializeEventHandlers();
 
+    // Add event listeners for layer control
+    this.addLayerControlListeners();
   }
 
   getDefaultWindyParameters() {
@@ -87,7 +92,7 @@ export class MapManager {
         "rgb(255, 0, 100)",
         "rgb(255, 0, 50)", 
         "rgb(255, 0, 0)"   
-]
+      ]
     };
   }
 
@@ -172,12 +177,10 @@ export class MapManager {
   setupBaseLayers() {
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     const Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
-    const Esri_DarkGreyCanvas = L.tileLayer('http://{s}.sm.mapstack.stamen.com/toner-lite,$fff[difference],$fff[@23],$fff[hsl-saturation@20])/{z}/{x}/{y}.png');
     const cartoDbDark = L.tileLayer('http://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png')
 
     this.layerControl = L.control.layers({
       Satellite: Esri_WorldImagery,
-      'Grey Canvas': Esri_DarkGreyCanvas,
       'OpenStreetMap': osm,
       'Carto Db Dark': cartoDbDark,
       'cartoDbLight': L.tileLayer('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'),
@@ -306,17 +309,31 @@ export class MapManager {
       .openOn(map);
     });
   }
+  
+  addLayerControlListeners(){
+    this.map.on("overlayadd", (e) => {console.log("overlayadd");
+      if (e.name === "Temperatura") {console.log("overlayadd Temperatura");
+        this.velocityLayer.setOptions({ colorScale: ["rgb(255, 255, 255)"] });
+      }
+    });
+  
+    this.map.on("overlayremove", (e) => {console.log("overlayremove");
+      if (e.name === "Temperatura") {console.log(this.options.windyParameters);
+        this.setWindyParameters(this.options.windyParameters);
+      }
+    });
+  }
 
   initializeTemperatureLayer() {
     console.log("######## initializeTemperatureLayer ########");
-    this.temperatureRenderer = new TemperatureRenderer(this.map, this.currentGrid.gridPointsMap, {
-      pixelSize: 3,
-      opacity: 0.7,
+    this.temperatureRenderer = new TemperatureRenderer(this.map, [], {
+      pixelSize: 5,
+      opacity: 0.3,
       controlName: 'Temperatura',
       layerControl: this.layerControl
     });
   
-    this.temperatureRenderer.render();
+    this.temperatureRenderer.canvasLayer = this.temperatureRenderer.render();
   }
 
   initializeWindLayer() {
@@ -335,7 +352,7 @@ export class MapManager {
 
   async updateTemperatureData() {
     console.log("######## updateTemperatureData ########");
-    this.temperatureRenderer.update(this.currentGrid.gridPointsMap);
+    this.temperatureRenderer.update(tempDataBuilder(this.currentGrid));
   }
 
   async updateWindData(dateOptions = {}) {
@@ -390,9 +407,10 @@ export class MapManager {
   }
 
   setWindyParameters(parameters) {
+    console.log("######## setWindyParameters ########", parameters);
     this.options.windyParameters = { ...this.options.windyParameters, ...parameters };
-    if (this.velocityLayer) {
-        this.velocityLayer.setOptions(this.options.windyParameters);
+    if (this.velocityLayer) {console.log("Seteando parametros de windy");
+      this.velocityLayer.setOptions(this.options.windyParameters);
     }
   }
 
@@ -484,15 +502,6 @@ class GridPoint {
     }
   }
 
-  getWindComponents() {
-    if (!this.weatherData?.wind) return null;
-
-    return convertWindDirection(
-      this.weatherData.wind.speed,
-      this.weatherData.wind.direction
-    );
-  }
-
   convertSpeed(speed, unit) {
     return unit === 'km/h' ? speed * 0.27778 : speed;
   }
@@ -526,18 +535,18 @@ class GridPoint {
 }
 
 function generateRandomGridData(points) {
-  console.log("Generando datos aleatorios uniformes");
-  const baseTemperature = (Math.random() * 10) + 15;
-  const baseWindSpeed = (Math.random() * 5) + 15;
-  const baseWindDirection = Math.random() * 360;
+  console.log("Generando datos aleatorios con mayor varianza");
+  const baseTemperature = (Math.random() * 20) + 5; // Temperatura entre 5º y 25º
+  const baseWindSpeed = (Math.random() * 10) + 5; // Velocidad del viento entre 5 y 15 m/s
+  const baseWindDirection = Math.random() * 360; // Dirección del viento entre 0 y 360 grados
 
   // Check if points is a Map and convert to array if necessary
   const pointsArray = points instanceof Map ? Array.from(points.values()) : points;
 
   pointsArray.forEach(point => {
-    const randomTemperature = (baseTemperature + (Math.random() * 2 - 5)).toFixed(2);
-    const randomWindSpeed = (baseWindSpeed + (Math.random() * 2 - 10)).toFixed(2);
-    const randomWindDirection = (baseWindDirection + (Math.random() * 10 - 90)).toFixed(2);
+    const randomTemperature = (baseTemperature + (Math.random() * 10 - 5)).toFixed(2); // Varianza de ±5
+    const randomWindSpeed = (baseWindSpeed + (Math.random() * 5 - 2.5)).toFixed(2); // Varianza de ±2.5
+    const randomWindDirection = (baseWindDirection + (Math.random() * 180 - 45)).toFixed(2); // Varianza de ±45
 
     const weatherData = {
       weather_units: {
@@ -556,8 +565,6 @@ function generateRandomGridData(points) {
 
     point.setWeatherData(weatherData);
   });
-
-  console.log("Random grid data generated");
 }
 
 // Convertir dirección del viento a componentes u y v
@@ -611,7 +618,7 @@ function getMapBoundsCoordinates(map, adjustment = 0) {
   var southWest = bounds.getSouthWest();
   var northEast = bounds.getNorthEast();
 
-  console.log("Puntos de los límites del mapa\nNW:", L.latLng(northEast.lat, southWest.lng), " NE:", northEast,
+  console.log("Map Bounds\nNW:", L.latLng(northEast.lat, southWest.lng), " NE:", northEast,
               " SW:", southWest, " SE:", L.latLng(southWest.lat, northEast.lng));
 
   function roundToMultiple(value, multiple, roundUp) {
@@ -649,7 +656,54 @@ function heatmapDataBuilder(grid){
   return {max: maxTemp, data: tempData};
 }
 
-// Logica para construir el json para usar con leaflet-velocity
+function tempDataBuilder(grid){
+  const { bounds, dx, dy, nx, ny, gridPointsMap } = grid;
+  
+  let latMin = bounds.getSouthWest().lat;
+  let latMax = bounds.getNorthWest().lat;
+  let lonMin = bounds.getSouthWest().lng;
+  let lonMax = bounds.getSouthEast().lng;
+  
+  let temperatureGrid = [];
+  
+  for (let j = 0; j < ny; j++) {
+    let latitude = latMax - j * dy;
+    for (let i = 0; i < nx; i++) {
+      let longitude = lonMin + i * dx;
+      if (latitude < latMin || longitude > lonMax) continue;
+      const pointKey = generatePointKey(latitude, longitude);
+      //if(gridPointsMap.has(pointKey)) console.log("tempDataBuilder");
+      let gridPoint = gridPointsMap.has(pointKey)
+        ? gridPointsMap.get(pointKey)
+        : new GridPoint(latitude, longitude);
+      temperatureGrid.push(gridPoint);
+    }
+  }
+
+  var temperature = [];
+  for (let i = 0; i < temperatureGrid.length; i++) {
+    const t = temperatureGrid[i].getTemperature();
+    temperature.push(t);
+  }
+
+  const tempData = {
+    header: {
+      lo1: bounds.getNorthWest().lng,
+      lo2: bounds.getSouthEast().lng,
+      la1: bounds.getNorthWest().lat,
+      la2: bounds.getSouthEast().lat,
+      nx: nx,
+      ny: ny,
+      dx: dx,
+      dy: dy
+    },
+    data: temperature
+  };
+
+  console.log(tempData);
+  return tempData;
+}
+
 function windyDataBuilder(Grid, options) {
   const { bounds, dx, dy, nx, ny, gridPointsMap } = Grid;
   const dateType = options.dateType;
@@ -662,20 +716,13 @@ function windyDataBuilder(Grid, options) {
   
   let grid = [];
   
-  // Recorremos las filas desde el norte hacia el sur
   for (let j = 0; j < ny; j++) {
-    // Comenzamos desde la latitud máxima y vamos descendiendo
     let latitude = latMax - j * dy;
-    
-    // Dentro de cada fila, de oeste a este
     for (let i = 0; i < nx; i++) {
       let longitude = lonMin + i * dx;
-      
-      // Validamos que el punto esté dentro de los límites
       if (latitude < latMin || longitude > lonMax) continue;
-      
       const pointKey = generatePointKey(latitude, longitude);
-      if(gridPointsMap.has(pointKey)) console.log("Punto encontrado");
+      //if(gridPointsMap.has(pointKey)) console.log("windyDataBuilder");
       let gridPoint = gridPointsMap.has(pointKey)
         ? gridPointsMap.get(pointKey)
         : new GridPoint(latitude, longitude);
@@ -798,6 +845,19 @@ function adjustToGrid(coord, gridStep = 0.0625) {
  */
 function generatePointKey(latitude, longitude, decimals = 4) {
   return `${latitude.toFixed(decimals)}_${longitude.toFixed(decimals)}`;
+}
+
+/**
+ * Genera una clave única basada en la fecha en formato aaaa-mm-dd.
+ *
+ * @param {Date} date - La fecha para generar la clave.
+ * @returns {string} - Clave en formato "aaaa-mm-dd".
+ */
+function generateDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -927,24 +987,6 @@ function buildWeatherURL(API, points, dateType, start_date, end_date) {
     }
   }
   return url;
-}
-
-
-function initializeWindLayer(map, windData) {
-  var velocityLayer = L.velocityLayer({
-    displayValues: true,
-    displayOptions: {
-      velocityType: "Wind data",
-      position: "bottomleft",
-      emptyString: "No wind data"
-    },
-    data: windData,
-    maxVelocity: 15,
-  });
-
-  velocityLayer.addTo(map);
-  // Añadir la capa al control de capas
-  layerControl.addOverlay(velocityLayerAPI, "API Wind Data");
 }
 
 // Calcular nx, ny, dx y dy

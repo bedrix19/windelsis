@@ -9,3 +9,12 @@ https://www.ncei.noaa.gov/access/services/data/v1?dataset=global-summary-of-the-
 
 Request Web Services Token for NOAA:
 SvNwwLVCTXrHejSdyNEkeEunLYQwKDPU
+
+## Reference
+
+`windelsis` is possible because of things like:
+
+- [L.CanvasOverlay.js](https://github.com/Sumbera/gLayers.Leaflet)
+- [leaflet-velocity](https://github.com/onaci/leaflet-velocity)
+- [WindJS](https://github.com/Esri/wind-js)
+- [earth](https://github.com/cambecc/earth)
