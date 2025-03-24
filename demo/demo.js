@@ -7,9 +7,10 @@ import { MapManager } from "../src/js/mapManager.js";
  * SdC: 42.8769, -8.5442
  * Pamplona: 42.8169, -1.6458
  * Lisboa: 38.7223, -9.1393
+ * Tavira: 37.1318, -7.6430
  */
 let mapManager = new MapManager('map', {
-  center: [42.8169, -1.6458],
+  center: [37.1318, -7.6430],
   zoom: 11,
   updateDelay: 500,
 });

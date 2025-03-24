@@ -1,29 +1,20 @@
-function getColorForTemperature(temp) {
-    // Definición de puntos de parada (stops) con sus valores y colores (en formato RGB)
-    const stops = [
-        { value: -10, color: [0, 0, 255] },     // Azul
-        { value: 0,   color: [0, 255, 255] },   // Cian
-        { value: 10,  color: [0, 255, 0] },     // Verde
-        { value: 20,  color: [255, 255, 0] },   // Amarillo
-        { value: 30,  color: [255, 0, 0] }      // Rojo
-    ];
-  
-    // Si la temperatura está fuera de rango, se retorna el color del extremo correspondiente
-    if (temp <= stops[0].value) {
-        const [r, g, b] = stops[0].color;
+function getColorForValue(value, colorScale) {
+    // Si el valor está fuera de rango, se retorna el color del extremo correspondiente
+    if (value <= colorScale[0].value) {
+        const [r, g, b] = colorScale[0].color;
         return { r, g, b };
     }
-    if (temp >= stops[stops.length - 1].value) {
-        const [r, g, b] = stops[stops.length - 1].color;
+    if (value >= colorScale[colorScale.length - 1].value) {
+        const [r, g, b] = colorScale[colorScale.length - 1].color;
         return { r, g, b };
     }
   
-    // Buscar entre qué dos puntos se encuentra la temperatura y hacer interpolación
-    for (let i = 0; i < stops.length - 1; i++) {
-        const current = stops[i];
-        const next = stops[i + 1];
-        if (temp >= current.value && temp <= next.value) {
-            const factor = (temp - current.value) / (next.value - current.value);
+    // Buscar entre qué dos puntos se encuentra el valor y hacer interpolación
+    for (let i = 0; i < colorScale.length - 1; i++) {
+        const current = colorScale[i];
+        const next = colorScale[i + 1];
+        if (value >= current.value && value <= next.value) {
+            const factor = (value - current.value) / (next.value - current.value);
             const r = Math.round(current.color[0] + factor * (next.color[0] - current.color[0]));
             const g = Math.round(current.color[1] + factor * (next.color[1] - current.color[1]));
             const b = Math.round(current.color[2] + factor * (next.color[2] - current.color[2]));
@@ -31,22 +22,41 @@ function getColorForTemperature(temp) {
         }
     }
 }
-  
-class TemperatureRenderer {
-    constructor(map, temperatureData, options = {}) {
+
+const COLOR_SCALES = {
+    temperature: [
+        { value: -10, color: [0, 0, 255] },     // Azul
+        { value: 0,   color: [0, 255, 255] },   // Cian
+        { value: 10,  color: [0, 255, 0] },     // Verde
+        { value: 20,  color: [255, 255, 0] },   // Amarillo
+        { value: 30,  color: [255, 0, 0] }      // Rojo
+    ],
+    precipitation: [
+        { value: 0,   color: [255, 255, 255] }, // Blanco
+        { value: 1,   color: [200, 255, 255] }, // Azul muy claro
+        { value: 5,   color: [100, 200, 255] }, // Azul claro
+        { value: 10,  color: [0, 100, 255] },   // Azul
+        { value: 25,  color: [0, 0, 255] },     // Azul oscuro
+        { value: 50,  color: [128, 0, 255] }    // Violeta
+    ]
+};
+
+class DataRenderer {
+    constructor(map, data, options = {}) {
         this.map = map;
-        this.temperatureData = temperatureData;
+        this.data = data;
         this.options = Object.assign({
             pixelSize: 5,
             opacity: 0.3,
-            controlName: 'Temperatura',
-            layerControl: map.layerControl 
+            controlName: 'Data Layer',
+            layerControl: map.layerControl,
+            colorScale: COLOR_SCALES.temperature
         }, options);
         this.canvasLayer = null;
         this._timer = null;
     }
 
-    render() {
+    init() {
         this._paneName = this.options.paneName || "overlayPane"; // Para leaflet < 1
         
         var pane = this.map._panes.overlayPane;
@@ -73,8 +83,8 @@ class TemperatureRenderer {
     }
 
     onDrawLayer(info) {
-        if (!this.temperatureData || this.temperatureData.data.length === 0) {
-            console.log(this.temperatureData, 'No hay datos disponibles para dibujar');
+        if (!this.data || this.data.data.length === 0) {
+            console.log(this.data, 'No hay datos disponibles para dibujar');
             return;
         }
 
@@ -95,8 +105,8 @@ class TemperatureRenderer {
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const latLng = this.map.containerPointToLatLng([x, y]);
-                    const temp = this.interpolateTemperature(latLng.lat, latLng.lng);
-                    const { r, g, b } = getColorForTemperature(temp);
+                    const value = this.interpolateValue(latLng.lat, latLng.lng);
+                    const { r, g, b } = getColorForValue(value, this.options.colorScale);
                     const a = Math.floor(this.options.opacity * 255);;
                     const index = (y * width + x) * 4;
                     data[index] = r;
@@ -107,7 +117,7 @@ class TemperatureRenderer {
             }
 
             // pintar los puntos de la grilla
-            const header = this.temperatureData.header;
+            const header = this.data.header;
             const nx = header.nx;
             const ny = header.ny;
             const dx = header.dx;
@@ -137,8 +147,8 @@ class TemperatureRenderer {
         }, 100);
     }
 
-    interpolateTemperature(lat, lng) {
-        const { header, data } = this.temperatureData;
+    interpolateValue(lat, lng) {
+        const { header, data } = this.data;
         const { lo1, lo2, la1, la2, nx, ny, dx, dy } = header;
         
         const i = Math.floor((la1 - lat) / dy);
@@ -165,23 +175,23 @@ class TemperatureRenderer {
         return t;
     }
 
-    update(temperatureData) {
-        this.temperatureData = temperatureData;
+    update(data) {
+        this.data = data;
         if (this.canvasLayer) {
-        this.canvasLayer.needRedraw();
+            this.canvasLayer.needRedraw();
         }
     }
 
     _clearTemperature() {
         if (this.canvasLayer && this.canvasLayer._canvas) {
-        const ctx = this.canvasLayer._canvas.getContext('2d');
-        ctx.clearRect(0, 0, this.canvasLayer._canvas.width, this.canvasLayer._canvas.height);
+            const ctx = this.canvasLayer._canvas.getContext('2d');
+            ctx.clearRect(0, 0, this.canvasLayer._canvas.width, this.canvasLayer._canvas.height);
         }
     }
 
     _destroyTemperatureLayer() {
         if (this._timer) clearTimeout(this._timer);
-        this._clearTemperature();
+            this._clearTemperature();
         if (this.canvasLayer) {
             this.map.removeLayer(this.canvasLayer);
             this.canvasLayer = null;
@@ -189,4 +199,4 @@ class TemperatureRenderer {
     }
 }
 
-export default TemperatureRenderer;
+export { DataRenderer, COLOR_SCALES };

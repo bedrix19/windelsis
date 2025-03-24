@@ -24,10 +24,12 @@ export function parseOpenMeteo(data, options){
             speed: weatherData.wind_speed_10m,
             direction: weatherData.wind_direction_10m
         },
+        precipitation: weatherData.precipitation,
         weatherUnits: {
             temperature: weatherUnits.temperature_2m,
             windSpeed: weatherUnits.wind_speed_10m,
-            windDirection: weatherUnits.wind_direction_10m
+            windDirection: weatherUnits.wind_direction_10m,
+            precipitation: weatherUnits.precipitation
         },
         timestamp: weatherData.time,
         rawData: data

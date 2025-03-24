@@ -1,5 +1,5 @@
 import { parseOpenMeteo, parseMeteoSIX } from "./apiService.js";
-import TemperatureRenderer from './TemperatureRenderer.js';
+import { DataRenderer, COLOR_SCALES } from "./DataRenderer.js"; './DataRenderer.js';
 
 export class MapManager {
   constructor(mapId, options = {}) {
@@ -7,6 +7,7 @@ export class MapManager {
     this.heatmapLayer = null;
     this.velocityLayer = null;
     this.temperatureRenderer = null;
+    this.precipitationRenderer = null;
     this.layerControl = null;
     this.isUpdating = false;
     this.lastZoom = null;
@@ -63,6 +64,7 @@ export class MapManager {
 
     // Initialize weather layers
     this.initializeTemperatureLayer();
+    this.initializePrecipitationLayer();
     this.initializeWindLayer();
 
     // Initialize event handlers
@@ -109,81 +111,106 @@ export class MapManager {
     else return 0.0625;
   }
 
-  getTemperatureAt(lat, lng) {
+  getWeatherDataAt(lat, lng) {
     const { gridPointsMap, dx, dy, nx, ny, bounds } = this.currentGrid;
   
     const latNW = bounds.getNorthWest().lat;
     const lonSW = bounds.getSouthWest().lng;
   
-    // Determinamos los índices de la celda en la cuadrícula
+    // Get grid cell indices
     const i = Math.floor((latNW - lat) / dy);
     const j = Math.floor((lng - lonSW) / dx);
   
     if (i < 0 || i >= ny - 1 || j < 0 || j >= nx - 1) {
-      throw new Error('Coordenadas fuera de los límites de la cuadrícula');
+      throw new Error('Coordinates outside grid bounds');
     }
   
-    // Calculamos las coordenadas de los 4 puntos de la celda:
-    // p1: esquina superior izquierda ([i, j])
+    // Calculate corner coordinates
     const lat_p1 = latNW - i * dy;
     const lng_p1 = lonSW + j * dx;
-
-    // p2: esquina superior derecha ([i, j+1])
     const lat_p2 = latNW - i * dy;
     const lng_p2 = lonSW + (j + 1) * dx;
-
-    // p3: esquina inferior izquierda ([i+1, j])
     const lat_p3 = latNW - (i + 1) * dy;
     const lng_p3 = lonSW + j * dx;
-
-    // p4: esquina inferior derecha ([i+1, j+1])
     const lat_p4 = latNW - (i + 1) * dy;
     const lng_p4 = lonSW + (j + 1) * dx;
 
-    // Se extraen los puntos del diccionario
-    const p1 = gridPointsMap.get(generatePointKey(lat_p1, lng_p1));//this.showWeatherPopup(lat_p1, lng_p1);
-    const p2 = gridPointsMap.get(generatePointKey(lat_p2, lng_p2));//this.showWeatherPopup(lat_p2, lng_p2);
-    const p3 = gridPointsMap.get(generatePointKey(lat_p3, lng_p3));//this.showWeatherPopup(lat_p3, lng_p3);
-    const p4 = gridPointsMap.get(generatePointKey(lat_p4, lng_p4));//this.showWeatherPopup(lat_p4, lng_p4);
+    // Get grid points
+    const p1 = gridPointsMap.get(generatePointKey(lat_p1, lng_p1));
+    const p2 = gridPointsMap.get(generatePointKey(lat_p2, lng_p2));
+    const p3 = gridPointsMap.get(generatePointKey(lat_p3, lng_p3));
+    const p4 = gridPointsMap.get(generatePointKey(lat_p4, lng_p4));
 
     if (!p1 || !p2 || !p3 || !p4) {
-      throw new Error('No se encontraron todos los puntos de la cuadrícula para la interpolación');
+      throw new Error('Missing grid points for interpolation');
     }
 
-    console.log("p1", p1, "p2", p2, "p3", p3, "p4", p4);
-
-    // Coordenadas para la interpolación
+    // Interpolation coordinates
     const x1 = p1.longitude;
     const x2 = p2.longitude;
     const y1 = p1.latitude;
     const y2 = p3.latitude;
-    // Dibujar el area de interpolación
-    L.rectangle([[y1, x1], [y2, x2]], { color: 'red', weight: 1 }).addTo(this.map);
+
+    // Draw interpolation area
+    const rectangle = L.rectangle([[y1, x1], [y2, x2]], { color: 'red', weight: 1 }).addTo(this.map);
+    this.map.once('click', () => this.map.removeLayer(rectangle));
   
-    // Extraer los valores numéricos a interpolar (por ejemplo, la temperatura)
-    const fQ11 = p1.weatherData.temperature;
-    const fQ21 = p2.weatherData.temperature;
-    const fQ12 = p3.weatherData.temperature;
-    const fQ22 = p4.weatherData.temperature;
-  
-    // Interpolación bilineal
-    const R1 = ((x2 - lng) / (x2 - x1)) * fQ11 + ((lng - x1) / (x2 - x1)) * fQ21;
-    const R2 = ((x2 - lng) / (x2 - x1)) * fQ12 + ((lng - x1) / (x2 - x1)) * fQ22;
-    const P  = ((y2 - lat) / (y2 - y1)) * R1 + ((lat - y1) / (y2 - y1)) * R2;
-  
-    return P;
+    // Interpolate temperature
+    const t11 = p1.weatherData.temperature;
+    const t21 = p2.weatherData.temperature;
+    const t12 = p3.weatherData.temperature;
+    const t22 = p4.weatherData.temperature;
+    const R1t = ((x2 - lng) / (x2 - x1)) * t11 + ((lng - x1) / (x2 - x1)) * t21;
+    const R2t = ((x2 - lng) / (x2 - x1)) * t12 + ((lng - x1) / (x2 - x1)) * t22;
+    const temperature = ((y2 - lat) / (y2 - y1)) * R1t + ((lat - y1) / (y2 - y1)) * R2t;
+
+    // Interpolate precipitation
+    const p11 = p1.weatherData.precipitation;
+    const p21 = p2.weatherData.precipitation;
+    const p12 = p3.weatherData.precipitation;
+    const p22 = p4.weatherData.precipitation;
+    const R1p = ((x2 - lng) / (x2 - x1)) * p11 + ((lng - x1) / (x2 - x1)) * p21;
+    const R2p = ((x2 - lng) / (x2 - x1)) * p12 + ((lng - x1) / (x2 - x1)) * p22;
+    const precipitation = ((y2 - lat) / (y2 - y1)) * R1p + ((lat - y1) / (y2 - y1)) * R2p;
+
+    // Interpolate wind
+    const ws11 = p1.weatherData.wind.speed;
+    const ws21 = p2.weatherData.wind.speed;
+    const ws12 = p3.weatherData.wind.speed;
+    const ws22 = p4.weatherData.wind.speed;
+    const R1w = ((x2 - lng) / (x2 - x1)) * ws11 + ((lng - x1) / (x2 - x1)) * ws21;
+    const R2w = ((x2 - lng) / (x2 - x1)) * ws12 + ((lng - x1) / (x2 - x1)) * ws22;
+    const windSpeed = ((y2 - lat) / (y2 - y1)) * R1w + ((lat - y1) / (y2 - y1)) * R2w;
+
+    const wd11 = p1.weatherData.wind.direction;
+    const wd21 = p2.weatherData.wind.direction;
+    const wd12 = p3.weatherData.wind.direction;
+    const wd22 = p4.weatherData.wind.direction;
+    const R1d = ((x2 - lng) / (x2 - x1)) * wd11 + ((lng - x1) / (x2 - x1)) * wd21;
+    const R2d = ((x2 - lng) / (x2 - x1)) * wd12 + ((lng - x1) / (x2 - x1)) * wd22;
+    const windDirection = ((y2 - lat) / (y2 - y1)) * R1d + ((lat - y1) / (y2 - y1)) * R2d;
+
+    return {
+      temperature: temperature,
+      precipitation: precipitation,
+      wind: {
+        speed: windSpeed,
+        direction: windDirection
+      }
+    };
   }
 
   setupBaseLayers() {
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     const Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
-    const cartoDbDark = L.tileLayer('http://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png')
+    const cartoDbDark = L.tileLayer('http://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png');
+    const cartoDbLight = L.tileLayer('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png');
 
     this.layerControl = L.control.layers({
       Satellite: Esri_WorldImagery,
       'OpenStreetMap': osm,
       'Carto Db Dark': cartoDbDark,
-      'cartoDbLight': L.tileLayer('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'),
+      'cartoDbLight': cartoDbLight,
     }).addTo(this.map);
 
     cartoDbDark.addTo(this.map);
@@ -299,41 +326,84 @@ export class MapManager {
         .catch(error => console.error('Error fetching weather data:', error));
 
       // Creamos el popup con algunas opciones básicas
+      const weatherData = this.getWeatherDataAt(lat, lng);
       var popup = L.popup({
-        closeOnClick: false, // Evita que se cierre al hacer clic en el mapa
-        autoClose: false,    // Permite mantener abierto el popup
+        closeOnClick: true,
         className: 'mi-popup-personalizado' // Clase personalizada para CSS
       })
       .setLatLng(e.latlng)
-      .setContent('<b>Coordenadas:</b><br>Lat: ' + lat.toFixed(5) + '<br>Lng: ' + lng.toFixed(5) + '<br><b>Temperatura:</b> ' + this.getTemperatureAt(lat, lng).toFixed(2) + '°C')
+      .setContent(
+        `<b>Coordenadas:</b><br>` +
+        `Lat: ${lat.toFixed(5)}<br>` +
+        `Lng: ${lng.toFixed(5)}<br>` +
+        `<b>Temperatura:</b> ${weatherData.temperature.toFixed(2)}°C<br>` +
+        `<b>Precipitación:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` +
+        `<b>Viento:</b> ${weatherData.wind.speed.toFixed(2)} m/s @ ${weatherData.wind.direction.toFixed(0)}°`
+      )
       .openOn(map);
     });
   }
   
   addLayerControlListeners(){
-    this.map.on("overlayadd", (e) => {console.log("overlayadd");
-      if (e.name === "Temperatura") {console.log("overlayadd Temperatura");
-        this.velocityLayer.setOptions({ colorScale: ["rgb(255, 255, 255)"] });
-      }
+    this.map.on("overlayadd", (e) => {console.log("overlayadd", e.layer);
+        if(e.layer === this.temperatureRenderer.canvasLayer) {
+            this.map.removeLayer(this.precipitationRenderer.canvasLayer);
+            this.setWindyParameters(["rgb(255, 255, 255)"]);
+            if (this.map.hasLayer(this.velocityLayer)) {
+                this.velocityLayer.remove();
+                this.velocityLayer.setOptions({ colorScale: ["rgb(255, 255, 255)"] });
+                this.velocityLayer.addTo(this.map);
+            }
+        } 
+        else if(e.layer === this.precipitationRenderer.canvasLayer) {
+            this.map.removeLayer(this.temperatureRenderer.canvasLayer);
+            this.setWindyParameters(["rgb(255, 255, 255)"]);
+            if (this.map.hasLayer(this.velocityLayer)) {
+                this.velocityLayer.remove();
+                this.velocityLayer.setOptions({ colorScale: ["rgb(255, 255, 255)"] });
+                this.velocityLayer.addTo(this.map);
+            }
+        }
     });
-  
-    this.map.on("overlayremove", (e) => {console.log("overlayremove");
-      if (e.name === "Temperatura") {console.log(this.options.windyParameters);
-        this.setWindyParameters(this.options.windyParameters);
-      }
+
+    this.map.on("overlayremove", (e) => {
+        console.log("overlayremove", e.layer);
+        // Cuando se remueve la capa de temperatura (o podrías agregar similar lógica para precipitación)
+        if(e.layer === this.temperatureRenderer.canvasLayer || e.layer === this.precipitationRenderer.canvasLayer) {
+            if (this.map.hasLayer(this.velocityLayer)) {
+                this.velocityLayer.remove();
+                // Se restablecen los parámetros originales; asumimos que this.options.windyParameters contiene los valores previos
+                this.setWindyParameters(this.options.windyParameters);
+                this.velocityLayer.addTo(this.map);
+            }
+        }
     });
   }
 
   initializeTemperatureLayer() {
     console.log("######## initializeTemperatureLayer ########");
-    this.temperatureRenderer = new TemperatureRenderer(this.map, [], {
+    this.temperatureRenderer = new DataRenderer(this.map, [], {
       pixelSize: 5,
       opacity: 0.3,
-      controlName: 'Temperatura',
+      controlName: 'Temperature Layer',
+      colorScale: COLOR_SCALES.temperature,
       layerControl: this.layerControl
     });
   
-    this.temperatureRenderer.canvasLayer = this.temperatureRenderer.render();
+    this.temperatureRenderer.canvasLayer = this.temperatureRenderer.init();
+  }
+
+  initializePrecipitationLayer() {
+    console.log("######## initializePrecipitationLayer ########");
+    this.precipitationRenderer = new DataRenderer(this.map, [], {
+      pixelSize: 5,
+      opacity: 0.3,
+      controlName: 'Precipitation Layer',
+      colorScale: COLOR_SCALES.precipitation,
+      layerControl: this.layerControl
+    });
+  
+    this.precipitationRenderer.canvasLayer = this.precipitationRenderer.init();
   }
 
   initializeWindLayer() {
@@ -343,6 +413,7 @@ export class MapManager {
   forceUpdate() {
     this.updateWindData().then(() => {
       this.updateTemperatureData();
+      this.updatePrecipitationData();
     });
   }
 
@@ -353,6 +424,11 @@ export class MapManager {
   async updateTemperatureData() {
     console.log("######## updateTemperatureData ########");
     this.temperatureRenderer.update(tempDataBuilder(this.currentGrid));
+  }
+
+  async updatePrecipitationData() {
+    console.log("######## updatePrecipitationData ########");
+    this.precipitationRenderer.update(precipDataBuilder(this.currentGrid));
   }
 
   async updateWindData(dateOptions = {}) {
@@ -477,13 +553,15 @@ class GridPoint {
       weather_units: {
         temperature: '°C',
         wind_speed: 'm/s',
-        wind_direction: '°'
+        wind_direction: '°',
+        precipitation: 'mm'
       },
       temperature: null,
       wind: {
         speed: null,
         direction: null,
       },
+      precipitation: null,
       timestamp: null,
       rawData: null,
     };
@@ -508,6 +586,10 @@ class GridPoint {
 
   getTemperature() {
     return this.weatherData.temperature;
+  }
+
+  getPrecipitation() {
+    return this.weatherData.precipitation;
   }
 
   getWindSpeed() {
@@ -539,6 +621,7 @@ function generateRandomGridData(points) {
   const baseTemperature = (Math.random() * 20) + 5; // Temperatura entre 5º y 25º
   const baseWindSpeed = (Math.random() * 10) + 5; // Velocidad del viento entre 5 y 15 m/s
   const baseWindDirection = Math.random() * 360; // Dirección del viento entre 0 y 360 grados
+  const basePrecipitation = Math.random() * 5; // Precipitación base entre 0 y 5 mm
 
   // Check if points is a Map and convert to array if necessary
   const pointsArray = points instanceof Map ? Array.from(points.values()) : points;
@@ -547,18 +630,21 @@ function generateRandomGridData(points) {
     const randomTemperature = (baseTemperature + (Math.random() * 10 - 5)).toFixed(2); // Varianza de ±5
     const randomWindSpeed = (baseWindSpeed + (Math.random() * 5 - 2.5)).toFixed(2); // Varianza de ±2.5
     const randomWindDirection = (baseWindDirection + (Math.random() * 180 - 45)).toFixed(2); // Varianza de ±45
+    const randomPrecipitation = (basePrecipitation + (Math.random() * 2 - 1)).toFixed(2); // Varianza de ±1
 
     const weatherData = {
       weather_units: {
         temperature: '°C',
         wind_speed: 'm/s',
-        wind_direction: '°'
+        wind_direction: '°',
+        precipitation: 'mm'
       },
       temperature: parseFloat(randomTemperature),
       wind: {
         speed: parseFloat(randomWindSpeed),
         direction: parseFloat(randomWindDirection)
       },
+      precipitation: parseFloat(randomPrecipitation),
       timestamp: new Date().toISOString(), // Format: 2025-02-24T09:19:57.000Z
       rawData: null
     };
@@ -639,24 +725,7 @@ function getMapBoundsCoordinates(map, adjustment = 0) {
   return L.latLngBounds(southWest, northEast)
 }
 
-// Logica para contrsuir el array para heatmap
-function heatmapDataBuilder(grid){
-  var tempData = [];
-  var maxTemp = 0;
-  for (let i = 0; i < grid.length; i++) {
-    const point = grid[i];
-    if(point.weatherData.temperature > maxTemp) maxTemp = point.weatherData.temperature;
-    tempData.push({
-      lat: point.latitude,
-      lng: point.longitude,
-      count: point.weatherData.temperature
-    });
-  }
-  maxTemp = maxTemp > 40 ? maxTemp : 40;
-  return {max: maxTemp, data: tempData};
-}
-
-function tempDataBuilder(grid){
+function weatherDataBuilder(grid, dataType = 'temperature') {
   const { bounds, dx, dy, nx, ny, gridPointsMap } = grid;
   
   let latMin = bounds.getSouthWest().lat;
@@ -664,7 +733,7 @@ function tempDataBuilder(grid){
   let lonMin = bounds.getSouthWest().lng;
   let lonMax = bounds.getSouthEast().lng;
   
-  let temperatureGrid = [];
+  let weatherGrid = [];
   
   for (let j = 0; j < ny; j++) {
     let latitude = latMax - j * dy;
@@ -672,21 +741,22 @@ function tempDataBuilder(grid){
       let longitude = lonMin + i * dx;
       if (latitude < latMin || longitude > lonMax) continue;
       const pointKey = generatePointKey(latitude, longitude);
-      //if(gridPointsMap.has(pointKey)) console.log("tempDataBuilder");
       let gridPoint = gridPointsMap.has(pointKey)
         ? gridPointsMap.get(pointKey)
         : new GridPoint(latitude, longitude);
-      temperatureGrid.push(gridPoint);
+      weatherGrid.push(gridPoint);
     }
   }
 
-  var temperature = [];
-  for (let i = 0; i < temperatureGrid.length; i++) {
-    const t = temperatureGrid[i].getTemperature();
-    temperature.push(t);
+  var weatherValues = [];
+  for (let i = 0; i < weatherGrid.length; i++) {
+    const value = dataType === 'temperature' 
+      ? weatherGrid[i].getTemperature()
+      : weatherGrid[i].getPrecipitation(); 
+    weatherValues.push(value);
   }
 
-  const tempData = {
+  const weatherData = {
     header: {
       lo1: bounds.getNorthWest().lng,
       lo2: bounds.getSouthEast().lng,
@@ -697,11 +767,20 @@ function tempDataBuilder(grid){
       dx: dx,
       dy: dy
     },
-    data: temperature
+    data: weatherValues
   };
 
-  console.log(tempData);
-  return tempData;
+  console.log("Datos:", dataType, weatherData);
+  return weatherData;
+}
+
+// Helper functions to maintain backwards compatibility
+function tempDataBuilder(grid) {
+  return weatherDataBuilder(grid, 'temperature');
+}
+
+function precipDataBuilder(grid) {
+  return weatherDataBuilder(grid, 'precipitation'); 
 }
 
 function windyDataBuilder(Grid, options) {
@@ -961,7 +1040,7 @@ function buildWeatherURL(API, points, dateType, start_date, end_date) {
     const baseUrl = 'https://api.open-meteo.com/v1/forecast';
     switch (dateType) {
       case 'current':
-        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}&current=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation&wind_speed_unit=ms`;
         break;
       case 'forecast':
         url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}&start_date=${start_date}&end_date=${end_date}&daily=wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=ms`;
@@ -1081,7 +1160,7 @@ function DrawWindData({ map, layerControl, velocityLayer = null, windyData, wind
       frameRate: windyParameters.frameRate || 15,
     });
 
-    layerControl.addOverlay(velocityLayer, "API Wind Data"); // Añadir la capa
+    layerControl.addOverlay(velocityLayer, "Wind Layer"); // Añadir la capa
     velocityLayer.setOptions(windyParameters);
     velocityLayer.addTo(map); // Mostrar la capa
     map.addLayer(velocityLayer); // Añadirla al campo de control
