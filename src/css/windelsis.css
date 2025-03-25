@@ -17,6 +17,11 @@ body {
     position: relative;
 }
 
+.dark-theme {
+    background-color: #1a1a1a;
+    color: #ffffff;
+}
+
 .leaflet-canvas-layer {
     opacity: 0.55;
 }

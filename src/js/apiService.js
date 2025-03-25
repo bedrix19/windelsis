@@ -1,41 +1,126 @@
-export function parseOpenMeteo(data, options){
-    if(!'current' in data || !'hourly' in data || !'daily' in data) throw new Error('Invalid data format');
+export async function openMeteoApiCaller(points, options) {
+  const batchSize = 100;
+  
+  const standardizedDataArray = new Array(points.length);
+  const promises = [];
 
-    let weatherData, weatherUnits, index;
+  for (let i = 0; i < points.length; i += batchSize) {
+    const batchPoints = points.slice(i, i + batchSize);
 
-    if(options.timeType == 'current') {
-        weatherData = data.current;
-        weatherUnits = data.current_units;
+    const latParams = batchPoints.map(p => p.latitude).join(',');
+    const lonParams = batchPoints.map(p => p.longitude).join(',');
+    const baseUrl = 'https://api.open-meteo.com/v1/forecast';
+    let url = '';
+
+    switch (options.dateType) {
+      case 'current':
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` +
+              `&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation` +
+              `&wind_speed_unit=ms`;
+        break;
+      case 'forecast':
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` +
+              `&start_date=${options.start_date}&end_date=${options.end_date}` +
+              `&daily=wind_speed_10m_max,wind_direction_10m_dominant` +
+              `&wind_speed_unit=ms`;
+        break;
+      case 'forecast_hourly':
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` +
+              `&start_date=${options.start_date}&end_date=${options.end_date}` +
+              `&hourly=wind_speed_10m,wind_direction_10m` +
+              `&wind_speed_unit=ms`;
+        break;
+      default:
+        throw new Error('Invalid date type');
     }
-    else if(options.timeType == 'forecast') {
-      for(let i = 0; i < data.hourly.length; i++){
-        if(data.hourly[i].time == options.timestamp){
-            index = i;
-            break;
+    console.log("Calling URL:", url);
+
+    const promise = fetch(url)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+        return response.json();
+      })
+      .then(data => ({ data, startIndex: i }));
+    promises.push(promise);
+  }
+
+  const results = await Promise.all(promises);
+
+  results.forEach(({ data, startIndex }) => {
+    data.forEach((weatherData, index) => {
+      if (!('current' in weatherData) && !('hourly' in weatherData) && !('daily' in weatherData)) {
+        throw new Error('Invalid data format');
       }
-      weatherData = data.daily[index];
-      weatherUnits = data.daily_units;
-    }
 
-    const standardizedData  = {
-        temperature: weatherData.temperature_2m,
+      let weatherDataItem, weatherUnits, dataIndex;
+      if (options.dateType === 'current') {
+        weatherDataItem = weatherData.current;
+        weatherUnits = weatherData.current_units;
+      } else throw new Error('Not current');
+
+      const standardized = {
+        temperature: weatherDataItem.temperature_2m,
         wind: {
-            speed: weatherData.wind_speed_10m,
-            direction: weatherData.wind_direction_10m
+          speed: weatherDataItem.wind_speed_10m,
+          direction: weatherDataItem.wind_direction_10m
         },
-        precipitation: weatherData.precipitation,
+        precipitation: weatherDataItem.precipitation,
         weatherUnits: {
-            temperature: weatherUnits.temperature_2m,
-            windSpeed: weatherUnits.wind_speed_10m,
-            windDirection: weatherUnits.wind_direction_10m,
-            precipitation: weatherUnits.precipitation
+          temperature: weatherUnits.temperature_2m,
+          windSpeed: weatherUnits.wind_speed_10m,
+          windDirection: weatherUnits.wind_direction_10m,
+          precipitation: weatherUnits.precipitation
         },
-        timestamp: weatherData.time,
-        rawData: data
-
+        timestamp: weatherDataItem.time,
+        rawData: weatherData
       };
-    return standardizedData;
+
+      standardizedDataArray[startIndex + index] = standardized;
+    });
+  });
+  console.log(standardizedDataArray);
+  return standardizedDataArray;
+}
+
+export function parseOpenMeteo(data, options){
+  if(!'current' in data || !'hourly' in data || !'daily' in data) throw new Error('Invalid data format');
+
+  let weatherData, weatherUnits, index;
+
+  if(options.timeType == 'current') {
+      weatherData = data.current;
+      weatherUnits = data.current_units;
+  }
+  else if(options.timeType == 'forecast') {
+    for(let i = 0; i < data.hourly.length; i++){
+      if(data.hourly[i].time == options.timestamp){
+          index = i;
+          break;
+      }
+    }
+    weatherData = data.daily[index];
+    weatherUnits = data.daily_units;
+  }
+
+  const standardizedData  = {
+      temperature: weatherData.temperature_2m,
+      wind: {
+          speed: weatherData.wind_speed_10m,
+          direction: weatherData.wind_direction_10m
+      },
+      precipitation: weatherData.precipitation,
+      weatherUnits: {
+          temperature: weatherUnits.temperature_2m,
+          windSpeed: weatherUnits.wind_speed_10m,
+          windDirection: weatherUnits.wind_direction_10m,
+          precipitation: weatherUnits.precipitation
+      },
+      timestamp: weatherData.time,
+      rawData: data
+    };
+  return standardizedData;
 }
 
 export function parseMeteoSIX(results) {

@@ -1,4 +1,5 @@
 import { MapManager } from "../src/js/mapManager.js";
+import { openMeteoApiCaller } from "../src/js/apiService.js";
 
 /**
  * Madrid: 40.4167, -3.7033
@@ -9,7 +10,7 @@ import { MapManager } from "../src/js/mapManager.js";
  * Lisboa: 38.7223, -9.1393
  * Tavira: 37.1318, -7.6430
  */
-let mapManager = new MapManager('map', {
+let mapManager = new MapManager('map', openMeteoApiCaller,{
   center: [37.1318, -7.6430],
   zoom: 11,
   updateDelay: 500,

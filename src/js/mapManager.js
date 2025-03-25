@@ -2,7 +2,8 @@ import { parseOpenMeteo, parseMeteoSIX } from "./apiService.js";
 import { DataRenderer, COLOR_SCALES } from "./DataRenderer.js"; './DataRenderer.js';
 
 export class MapManager {
-  constructor(mapId, options = {}) {
+  constructor(mapId, apiCaller, options = {}) {
+    this.apiCaller = apiCaller;
     this.map = null;
     this.heatmapLayer = null;
     this.velocityLayer = null;
@@ -438,7 +439,7 @@ export class MapManager {
 
     try {
       console.log("Primera carga de datos");
-      await fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
+      await this.fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
 
       this.velocityLayer = DrawWindData({
         map: this.map,
@@ -542,6 +543,32 @@ export class MapManager {
       .openOn(this.map);
   }
   
+  async fetchWeatherData(grid, options) {
+    const points = grid.grid || grid; // Use grid.grid if available; otherwise, use grid directly
+  
+    if (options.randomData) {
+      generateRandomGridData(points);
+      return;
+    }
+  
+    try {
+      const standardizedDataArray = await this.apiCaller(points, options);
+
+      // Iterate over each point and assign the corresponding weather data.
+      standardizedDataArray.forEach((weatherData, index) => {
+        // If the point object has a setWeatherData method, use it; otherwise, assign the property directly.
+        if (typeof points[index].setWeatherData === 'function') {
+          console.log(points[index], "setWeather\n###", weatherData);
+          points[index].setWeatherData(weatherData);
+        } else {
+          points[index].weatherData = weatherData;
+        }
+      });
+    } catch (error) {
+      console.error('Fetching weather data failed:', error);
+      throw error;
+    }
+  }
 }
 
 class GridPoint {
