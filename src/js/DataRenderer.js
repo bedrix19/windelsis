@@ -25,11 +25,15 @@ function getColorForValue(value, colorScale) {
 
 const COLOR_SCALES = {
     temperature: [
-        { value: -10, color: [0, 0, 255] },     // Azul
-        { value: 0,   color: [0, 255, 255] },   // Cian
-        { value: 10,  color: [0, 255, 0] },     // Verde
-        { value: 20,  color: [255, 255, 0] },   // Amarillo
-        { value: 30,  color: [255, 0, 0] }      // Rojo
+        { value: -15, color: [113, 190, 207] },  // Azul claro
+        { value: -8,  color: [137, 204, 197] },  // Verde azulado
+        { value: -4,  color: [120, 184, 206] },  // Azul medio
+        { value: 0,   color: [98, 129, 207] },   // Azul más oscuro
+        { value: 1,   color: [128, 167, 132] },  // Verde grisáceo
+        { value: 10,  color: [181, 202, 96] },   // Verde amarillento
+        { value: 21,  color: [242, 177, 59] },   // Amarillo anaranjado
+        { value: 30,  color: [235, 96, 49] },    // Naranja rojizo
+        { value: 47,  color: [112, 45, 21] }     // Marrón oscuro
     ],
     precipitation: [
         { value: 0,   color: [255, 255, 255] }, // Blanco
@@ -41,6 +45,10 @@ const COLOR_SCALES = {
     ]
 };
 
+/**
+ * Use of the canvasLayer plugin for Leaflet to render data on a map
+ * https://github.com/Sumbera/gLayers.Leaflet
+ */
 class DataRenderer {
     constructor(map, data, options = {}) {
         this.map = map;
@@ -71,19 +79,13 @@ class DataRenderer {
             pane: pane
         }).delegate(this);
         
-        this.canvasLayer.addTo(this.map);
-        
-        if (this.options.layerControl) {
-            this.options.layerControl.addOverlay(this.canvasLayer, this.options.controlName);
-        } else if (this.map.layerControl) {
-            this.map.layerControl.addOverlay(this.canvasLayer, this.options.controlName);
-        }
+        this.options.layerControl.addOverlay(this.canvasLayer, this.options.controlName);
         
         return this.canvasLayer;
     }
 
     onDrawLayer(info) {
-        if (!this.data || this.data.data.length === 0) {
+        if (!this.data || !this.data.data || this.data.data.length === 0) {
             console.log(this.data, 'No hay datos disponibles para dibujar');
             return;
         }

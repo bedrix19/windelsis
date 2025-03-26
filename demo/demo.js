@@ -11,12 +11,12 @@ import { openMeteoApiCaller } from "../src/js/apiService.js";
  * Tavira: 37.1318, -7.6430
  */
 let mapManager = new MapManager('map', openMeteoApiCaller,{
-  center: [37.1318, -7.6430],
+  center: [43.3623, -8.4104],
   zoom: 11,
   updateDelay: 500,
 });
 
-await mapManager.getCurrentData();
+mapManager.getCurrentData();
 
 document.getElementById('testMapManager').addEventListener('click', async () => {
   //get map data to destroy and recreate the object

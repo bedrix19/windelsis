@@ -22,7 +22,7 @@ export class MapManager {
       nx: null,
       ny: null
     };
-    this.gridCollection = null; // Para almacenar las cuadrículas de datos por tipo de fecha
+    this.gridsMap = null; // Para almacenar las cuadrículas de datos por tipo de fecha
     this.options = {
       randomData: options.randomData || true,
       center: options.center || [42.8, -8],
@@ -33,7 +33,7 @@ export class MapManager {
       pointDistance:  options.pointDistance || null,
       maxGridPoints: options.maxGridPoints || 600,
       mapAdjustment: options.mapAdjustment || 0,
-      windyParameters: this.getDefaultWindyParameters(),
+      windyParameters: options.windyParams || this.getDefaultWindyParameters(),
       dateType: options.dateType || 'current',
       start_date: options.start_date || null,
       end_date: options.end_date || null,
@@ -59,7 +59,7 @@ export class MapManager {
                                   ? this.options.pointDistance
                                   : this.getPointDistanceFromBounds(mapBounds);
     this.currentGrid.gridPointsMap = new Map();
-    this.currentGrid.gridCollection = new Map();
+    this.gridsMap = new Map();
     this.currentGrid = gridBuilder(this.map, this.options.pointDistance, mapBounds, this.currentGrid.gridPointsMap);
     console.log("currentGrid", this.currentGrid);
 
@@ -114,86 +114,56 @@ export class MapManager {
 
   getWeatherDataAt(lat, lng) {
     const { gridPointsMap, dx, dy, nx, ny, bounds } = this.currentGrid;
-  
+
     const latNW = bounds.getNorthWest().lat;
     const lonSW = bounds.getSouthWest().lng;
-  
+
     // Get grid cell indices
     const i = Math.floor((latNW - lat) / dy);
     const j = Math.floor((lng - lonSW) / dx);
-  
+
     if (i < 0 || i >= ny - 1 || j < 0 || j >= nx - 1) {
       throw new Error('Coordinates outside grid bounds');
     }
-  
-    // Calculate corner coordinates
-    const lat_p1 = latNW - i * dy;
-    const lng_p1 = lonSW + j * dx;
-    const lat_p2 = latNW - i * dy;
-    const lng_p2 = lonSW + (j + 1) * dx;
-    const lat_p3 = latNW - (i + 1) * dy;
-    const lng_p3 = lonSW + j * dx;
-    const lat_p4 = latNW - (i + 1) * dy;
-    const lng_p4 = lonSW + (j + 1) * dx;
 
-    // Get grid points
-    const p1 = gridPointsMap.get(generatePointKey(lat_p1, lng_p1));
-    const p2 = gridPointsMap.get(generatePointKey(lat_p2, lng_p2));
-    const p3 = gridPointsMap.get(generatePointKey(lat_p3, lng_p3));
-    const p4 = gridPointsMap.get(generatePointKey(lat_p4, lng_p4));
+    // Calculate corner coordinates and retrieve grid points
+    const corners = [
+      { lat: latNW - i * dy, lng: lonSW + j * dx },
+      { lat: latNW - i * dy, lng: lonSW + (j + 1) * dx },
+      { lat: latNW - (i + 1) * dy, lng: lonSW + j * dx },
+      { lat: latNW - (i + 1) * dy, lng: lonSW + (j + 1) * dx }
+    ];
 
-    if (!p1 || !p2 || !p3 || !p4) {
+    const points = corners.map(({ lat, lng }) => gridPointsMap.get(generatePointKey(lat, lng)));
+    if (points.some(p => !p)) {
       throw new Error('Missing grid points for interpolation');
     }
 
     // Interpolation coordinates
-    const x1 = p1.longitude;
-    const x2 = p2.longitude;
-    const y1 = p1.latitude;
-    const y2 = p3.latitude;
+    const [p1, p2, p3, p4] = points;
+    const [x1, x2] = [p1.longitude, p2.longitude];
+    const [y1, y2] = [p1.latitude, p3.latitude];
 
     // Draw interpolation area
     const rectangle = L.rectangle([[y1, x1], [y2, x2]], { color: 'red', weight: 1 }).addTo(this.map);
     this.map.once('click', () => this.map.removeLayer(rectangle));
-  
-    // Interpolate temperature
-    const t11 = p1.weatherData.temperature;
-    const t21 = p2.weatherData.temperature;
-    const t12 = p3.weatherData.temperature;
-    const t22 = p4.weatherData.temperature;
-    const R1t = ((x2 - lng) / (x2 - x1)) * t11 + ((lng - x1) / (x2 - x1)) * t21;
-    const R2t = ((x2 - lng) / (x2 - x1)) * t12 + ((lng - x1) / (x2 - x1)) * t22;
-    const temperature = ((y2 - lat) / (y2 - y1)) * R1t + ((lat - y1) / (y2 - y1)) * R2t;
 
-    // Interpolate precipitation
-    const p11 = p1.weatherData.precipitation;
-    const p21 = p2.weatherData.precipitation;
-    const p12 = p3.weatherData.precipitation;
-    const p22 = p4.weatherData.precipitation;
-    const R1p = ((x2 - lng) / (x2 - x1)) * p11 + ((lng - x1) / (x2 - x1)) * p21;
-    const R2p = ((x2 - lng) / (x2 - x1)) * p12 + ((lng - x1) / (x2 - x1)) * p22;
-    const precipitation = ((y2 - lat) / (y2 - y1)) * R1p + ((lat - y1) / (y2 - y1)) * R2p;
+    // Generic bilinear interpolation function
+    const interpolate = (v11, v21, v12, v22) => {
+      const R1 = ((x2 - lng) / (x2 - x1)) * v11 + ((lng - x1) / (x2 - x1)) * v21;
+      const R2 = ((x2 - lng) / (x2 - x1)) * v12 + ((lng - x1) / (x2 - x1)) * v22;
+      return ((y2 - lat) / (y2 - y1)) * R1 + ((lat - y1) / (y2 - y1)) * R2;
+    };
 
-    // Interpolate wind
-    const ws11 = p1.weatherData.wind.speed;
-    const ws21 = p2.weatherData.wind.speed;
-    const ws12 = p3.weatherData.wind.speed;
-    const ws22 = p4.weatherData.wind.speed;
-    const R1w = ((x2 - lng) / (x2 - x1)) * ws11 + ((lng - x1) / (x2 - x1)) * ws21;
-    const R2w = ((x2 - lng) / (x2 - x1)) * ws12 + ((lng - x1) / (x2 - x1)) * ws22;
-    const windSpeed = ((y2 - lat) / (y2 - y1)) * R1w + ((lat - y1) / (y2 - y1)) * R2w;
-
-    const wd11 = p1.weatherData.wind.direction;
-    const wd21 = p2.weatherData.wind.direction;
-    const wd12 = p3.weatherData.wind.direction;
-    const wd22 = p4.weatherData.wind.direction;
-    const R1d = ((x2 - lng) / (x2 - x1)) * wd11 + ((lng - x1) / (x2 - x1)) * wd21;
-    const R2d = ((x2 - lng) / (x2 - x1)) * wd12 + ((lng - x1) / (x2 - x1)) * wd22;
-    const windDirection = ((y2 - lat) / (y2 - y1)) * R1d + ((lat - y1) / (y2 - y1)) * R2d;
+    // Interpolate weather data
+    const temperature = interpolate(p1.weatherData.temperature, p2.weatherData.temperature, p3.weatherData.temperature, p4.weatherData.temperature);
+    const precipitation = interpolate(p1.weatherData.precipitation, p2.weatherData.precipitation, p3.weatherData.precipitation, p4.weatherData.precipitation);
+    const windSpeed = interpolate(p1.weatherData.wind.speed, p2.weatherData.wind.speed, p3.weatherData.wind.speed, p4.weatherData.wind.speed);
+    const windDirection = interpolate(p1.weatherData.wind.direction, p2.weatherData.wind.direction, p3.weatherData.wind.direction, p4.weatherData.wind.direction);
 
     return {
-      temperature: temperature,
-      precipitation: precipitation,
+      temperature,
+      precipitation,
       wind: {
         speed: windSpeed,
         direction: windDirection
@@ -238,15 +208,16 @@ export class MapManager {
       this.updateTimeout = null;
     }
   
+  
+    // Quitar todos los eventos del mapa
+
     // Quitar todos los eventos del mapa
     if (this.map) {
       this.map.off();
-      // Remover el mapa del DOM
       this.map.remove();
       this.map = null;
     }
 
-    // Limpiar la información de la cuadrícula
     this.currentGrid = null;
   }
 
@@ -262,24 +233,19 @@ export class MapManager {
     console.log("######## initializeEventHandlers ########");
     const map = this.map;
 
-    const handleMoveEnd = this.debounce(() => {
-      console.log("Procesando 'moveend'...");
-
+    const handleMoveEnd = this.debounce(() => {//console.log("Procesando 'moveend'...");
       var mapBounds = map.getBounds();
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
 
-      if (!isInside) {
-        console.log("El área visible del mapa NO está completamente dentro del área definida.");
+      if (!isInside) {//console.log("Hole map is not in the grid");
         const dataBounds = getMapBoundsCoordinates(map, this.options.mapAdjustment);
         this.currentGrid = gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap);
         this.forceUpdate();
       }
     }, 300);
 
-    const handleZoomEnd = this.debounce(async () => {
-      console.log("Procesando 'zoomend'...");
-
+    const handleZoomEnd = this.debounce(async () => {//console.log("Procesando 'zoomend'...");
       const mapBounds = map.getBounds();
       console.log("mapBounds", mapBounds);
 
@@ -293,8 +259,7 @@ export class MapManager {
       console.log("pointDistance", pointDistance);
 
       const pointChanged = pointDistance !== this.options.pointDistance;
-      if (!isInside || pointChanged) {
-        console.log("El área visible del mapa NO está completamente dentro del área definida.");
+      if (!isInside || pointChanged) {//console.log("Hole map is not in the grid");
         this.options.pointDistance = pointDistance;
         this.currentGrid = gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap);
         this.forceUpdate();
@@ -308,38 +273,31 @@ export class MapManager {
       var lat = e.latlng.lat;
       var lng = e.latlng.lng;
     
-      // Llama a la API de open-meteo para obtener los datos de la ubicación
-      const baseUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
-      fetch(baseUrl)
-        .then(response => response.json())
-        .then(data => {
-          console.log('Datos de open-meteo:\n',data);
-        })
-        .catch(error => console.error('Error fetching weather data:', error));
+      // Call the API to fetch weather data for the clicked point
+      const grid = {
+        grid: [new GridPoint(lat, lng)],
+      };
+      const options = {
+        randomData: this.options.randomData,
+        dateType: this.options.dateType,
+      };
 
-      const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-      const baseUrl2 = `https://servizos.meteogalicia.gal/apiv4/getNumericForecastInfo?coords=${lng},${lat}&variables=temperature,wind&API_KEY=219XBzNU7vG87JnRXaDq6uh35DbheXH1tAx72B6ElfPoVe7S6mqWUKzSQkJuqcLl`;
-      fetch(baseUrl2)
-        .then(response => response.json())
-        .then(data => {
-          console.log('Datos de MeteoSIX:\n',data);
-        })
-        .catch(error => console.error('Error fetching weather data:', error));
+      const pointData = this.fetchWeatherData(grid, options);
+      console.log('API data:\n', pointData);
 
-      // Creamos el popup con algunas opciones básicas
       const weatherData = this.getWeatherDataAt(lat, lng);
       var popup = L.popup({
         closeOnClick: true,
-        className: 'mi-popup-personalizado' // Clase personalizada para CSS
+        className: 'own-popup' // CSS class
       })
       .setLatLng(e.latlng)
       .setContent(
-        `<b>Coordenadas:</b><br>` +
+        `<b>Coordinates:</b><br>` +
         `Lat: ${lat.toFixed(5)}<br>` +
         `Lng: ${lng.toFixed(5)}<br>` +
-        `<b>Temperatura:</b> ${weatherData.temperature.toFixed(2)}°C<br>` +
-        `<b>Precipitación:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` +
-        `<b>Viento:</b> ${weatherData.wind.speed.toFixed(2)} m/s @ ${weatherData.wind.direction.toFixed(0)}°`
+        `<b>Temperature:</b> ${weatherData.temperature.toFixed(2)}°C<br>` +
+        `<b>Precipitation:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` +
+        `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°`
       )
       .openOn(map);
     });
@@ -348,23 +306,26 @@ export class MapManager {
   addLayerControlListeners(){
     this.map.on("overlayadd", (e) => {console.log("overlayadd", e.layer);
         if(e.layer === this.temperatureRenderer.canvasLayer) {
-            this.map.removeLayer(this.precipitationRenderer.canvasLayer);
-            this.setWindyParameters(["rgb(255, 255, 255)"]);
-            if (this.map.hasLayer(this.velocityLayer)) {
-                this.velocityLayer.remove();
-                this.velocityLayer.setOptions({ colorScale: ["rgb(255, 255, 255)"] });
-                this.velocityLayer.addTo(this.map);
-            }
-        } 
-        else if(e.layer === this.precipitationRenderer.canvasLayer) {
-            this.map.removeLayer(this.temperatureRenderer.canvasLayer);
-            this.setWindyParameters(["rgb(255, 255, 255)"]);
-            if (this.map.hasLayer(this.velocityLayer)) {
-                this.velocityLayer.remove();
-                this.velocityLayer.setOptions({ colorScale: ["rgb(255, 255, 255)"] });
-                this.velocityLayer.addTo(this.map);
-            }
-        }
+          this.map.removeLayer(this.precipitationRenderer.canvasLayer);
+          this.setWindyParameters(["rgb(255, 255, 255)"]);
+          if (this.map.hasLayer(this.velocityLayer)) {
+              this.velocityLayer.remove();
+              this.velocityLayer.setOptions({ colorScale: ["rgb(255, 255, 255)"] });
+              this.velocityLayer.addTo(this.map);
+          }
+        }else if(e.layer === this.precipitationRenderer.canvasLayer) {
+          this.map.removeLayer(this.temperatureRenderer.canvasLayer);
+          this.setWindyParameters(["rgb(255, 255, 255)"]);
+          if (this.map.hasLayer(this.velocityLayer)) {
+              this.velocityLayer.remove();
+              this.velocityLayer.setOptions({ colorScale: ["rgb(255, 255, 255)"] });
+              this.velocityLayer.addTo(this.map);
+          }
+        }/*else if (e.layer === this.velocityLayer) {
+          if (!this.map.hasLayer(this.temperatureRenderer.canvasLayer) || !this.map.hasLayer(this.precipitationRenderer.canvasLayer)) {
+            this.setWindyParameters(this.options.windyParameters);
+          }
+        }When adding any of the temp or prec layers, windy is added again and the ‘if’ is read.*/
     });
 
     this.map.on("overlayremove", (e) => {
@@ -409,50 +370,48 @@ export class MapManager {
 
   initializeWindLayer() {
     console.log("######## initializeWindLayer ########");
+    this.velocityLayer = L.velocityLayer({
+      displayValues: true,
+      displayOptions: {
+        velocityType: "Global Wind",
+        emptyString: "No velocity data"
+      },
+    });
+
+    this.layerControl.addOverlay(this.velocityLayer, "Wind Layer"); // Añadir la capa
+    this.velocityLayer.setOptions(this.options.windyParameters);
   }
 
   forceUpdate() {
-    this.updateWindData().then(() => {
+    this.updateWeatherData().then(() => {
       this.updateTemperatureData();
       this.updatePrecipitationData();
+      this.updateWindData();
     });
   }
 
   async updateWeatherData(){
     // Logica para actualizar la grilla de datos meteorológicos
+    const standardizedData = await this.fetchWeatherData(this.currentGrid, this.options);
+
+    // Iterate over each point and assign the corresponding weather data.
+    if(!this.options.randomData)
+      standardizedData.forEach((weatherData, index) => this.currentGrid.grid[index].setWeatherData(weatherData));
   }
 
-  async updateTemperatureData() {
+  updateTemperatureData() {
     console.log("######## updateTemperatureData ########");
     this.temperatureRenderer.update(tempDataBuilder(this.currentGrid));
   }
 
-  async updatePrecipitationData() {
+  updatePrecipitationData() {
     console.log("######## updatePrecipitationData ########");
     this.precipitationRenderer.update(precipDataBuilder(this.currentGrid));
   }
 
-  async updateWindData(dateOptions = {}) {
-    console.log("######## updateWindData ########", dateOptions);
-    if (this.isUpdating) return;
-    this.isUpdating = true;
-
-    try {
-      console.log("Primera carga de datos");
-      await this.fetchWeatherData(this.currentGrid, this.options);console.log("currentGrid", this.currentGrid);
-
-      this.velocityLayer = DrawWindData({
-        map: this.map,
-        layerControl: this.layerControl,
-        velocityLayer: this.velocityLayer,
-        windyParameters: this.options.windyParameters,
-        windyData: windyDataBuilder(this.currentGrid, this.options)
-      });
-    } catch (error) {
-      console.error('Error updating wind data:', error);
-    } finally {
-      this.isUpdating = false;
-    }
+  updateWindData() {
+    console.log("######## updateWindData ########");
+    this.velocityLayer.setData(windyDataBuilder(this.currentGrid, this.options));
   }
 
   getMap() {
@@ -467,28 +426,37 @@ export class MapManager {
     return this.currentGrid;
   }
 
-  async getCurrentData() {
+  getCurrentData() {/*
+    const now = new Date();
+    const formattedDate = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
+    const key = `${this.options.dateType}_${formattedDate}`;console.log("key", key);*/
+    if (this.gridsMap.has('current')) {
+      this.currentGrid = this.gridsMap.get('current');
+    } else {
+      let auxGrid = gridBuilder(
+        this.map,
+        this.options.pointDistance,
+        getMapBoundsCoordinates(this.map, this.options.mapAdjustment),
+        new Map()
+      );
+      console.log("auxGrid", auxGrid);
+      this.gridsMap.set('current', auxGrid);
+      this.currentGrid = this.gridsMap.get('current');
+    }
     return this.setDateType('current');
+    
   }
 
-  async getForecastData(start_date, end_date) {
+  getForecastData(start_date, end_date) {
     return this.setDateType('forecast', { start_date, end_date });
   }
 
-  async getHourlyForecast(start_date, end_date, hour_index) {
+  getHourlyForecast(start_date, end_date, hour_index) {
     return this.setDateType('forecast_hourly', { 
       start_date, 
       end_date, 
       hour_index 
     });
-  }
-
-  setWindyParameters(parameters) {
-    console.log("######## setWindyParameters ########", parameters);
-    this.options.windyParameters = { ...this.options.windyParameters, ...parameters };
-    if (this.velocityLayer) {console.log("Seteando parametros de windy");
-      this.velocityLayer.setOptions(this.options.windyParameters);
-    }
   }
 
   setDateType(dateType, options = {}) {
@@ -505,6 +473,14 @@ export class MapManager {
     }
 
     return this.forceUpdate();
+  }
+
+  setWindyParameters(parameters) {
+    console.log("######## setWindyParameters ########", parameters);
+    this.options.windyParameters = { ...this.options.windyParameters, ...parameters };
+    if (this.velocityLayer) {console.log("Seteando parametros de windy");
+      this.velocityLayer.setOptions(this.options.windyParameters);
+    }
   }
 
   showWeatherPopup(lat, lng) {
@@ -536,7 +512,7 @@ export class MapManager {
     
     // Crear y abrir el popup en el mapa
     L.popup({
-      closeOnClick: false, // Evita que se cierre al hacer clic en el mapa
+      closeOnClick: true, // Evita que se cierre al hacer clic en el mapa
       autoClose: false,    // Permite mantener abierto el popup)
     }).setLatLng([lat, lng])
       .setContent(popupContent)
@@ -554,16 +530,7 @@ export class MapManager {
     try {
       const standardizedDataArray = await this.apiCaller(points, options);
 
-      // Iterate over each point and assign the corresponding weather data.
-      standardizedDataArray.forEach((weatherData, index) => {
-        // If the point object has a setWeatherData method, use it; otherwise, assign the property directly.
-        if (typeof points[index].setWeatherData === 'function') {
-          console.log(points[index], "setWeather\n###", weatherData);
-          points[index].setWeatherData(weatherData);
-        } else {
-          points[index].weatherData = weatherData;
-        }
-      });
+      return standardizedDataArray;
     } catch (error) {
       console.error('Fetching weather data failed:', error);
       throw error;
@@ -842,52 +809,6 @@ function windyDataBuilder(Grid, options) {
     u_component.push(u);
     v_component.push(v);
   }
-  /*if(dateType == 'forecast_hourly') {
-    for (let i = 0; i < data.length; i++) { // data.length should be equal to nx * ny
-      var windSpeedMs;
-      if(data[i].hourly_units.wind_speed_10m == "km/h") {
-        windSpeedMs = data[i].hourly.wind_speed_10m[hour_index] * 0.27778;
-      }else if(data[i].hourly_units.wind_speed_10m == "m/s") {
-        windSpeedMs = data[i].hourly.wind_speed_10m[hour_index];
-      }else console.error("Unrecognized wind speed unit");
-  
-      var windDirection = data[i].hourly.wind_direction_10m[hour_index];
-      const { u, v } = convertWindDirection(windSpeedMs, windDirection);
-      u_component.push(u);
-      v_component.push(v);
-    }
-  }
-  else if (dateType == 'forecast') {
-    for (let i = 0; i < data.length; i++) {
-      var windSpeedMs;
-      if(data[i].daily_units.wind_speed_10m_max == "km/h") {
-        windSpeedMs = data[i].daily.wind_speed_10m_max[0] * 0.27778;
-      }else if(data[i].daily_units.wind_speed_10m_max == "m/s") {
-        windSpeedMs = data[i].daily.wind_speed_10m_max[0];
-      }else console.error("Unrecognized wind speed unit");
-  
-      var windDirection = data[i].daily.wind_direction_10m_dominant[0];
-      const { u, v } = convertWindDirection(windSpeedMs, windDirection);
-      u_component.push(u);
-      v_component.push(v);
-    }
-  }
-  else if(dateType == 'current') {
-    for (let i = 0; i < data.length; i++) {
-      var windSpeedMs;
-      if(data[i].current_units.wind_speed_10m == "km/h") {
-        windSpeedMs = data[i].current.wind_speed_10m * 0.27778;
-      }else if(data[i].current_units.wind_speed_10m == "m/s") {
-        windSpeedMs = data[i].current.wind_speed_10m;
-      }else console.error("Unrecognized wind speed unit");
-  
-      var windDirection = data[i].current.wind_direction_10m;
-      const { u, v } = convertWindDirection(windSpeedMs, windDirection);
-      u_component.push(u);
-      v_component.push(v);
-    }
-  } else console.error("Unrecognized data type");
-  */
 
   const windData = [
     {
@@ -1028,7 +949,7 @@ async function fetchWeatherData(grid, options, API = 'OpenMeteo') {
   }
 
   const fetchPromises = []; // Array to store all fetch promises
-  
+
   // Agrupar los puntos en lotes de batchSize coordenadas por llamada
   const batchSize = 100;
   for (let i = 0; i < points.length; i += batchSize) {
@@ -1134,7 +1055,7 @@ function gridBuilder(map, pointDistance, gridLimits, gridPointsMap) {//gridLimit
   // Generar las coordenadas de los puntos
   const points = [];
   let count = 0, count1 = 0;
-  console.log(gridPointsMap)
+  //console.log(gridPointsMap);
   for (let i = 0; i < ny; i++) {
     const latitude = gridLimits.getNorthWest().lat - i * dy;
     for (let j = 0; j < nx; j++) {

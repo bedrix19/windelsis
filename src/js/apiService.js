@@ -1,9 +1,8 @@
 export async function openMeteoApiCaller(points, options) {
-  const batchSize = 100;
-  
   const standardizedDataArray = new Array(points.length);
   const promises = [];
 
+  const batchSize = 100; // OpenMeteo API limit
   for (let i = 0; i < points.length; i += batchSize) {
     const batchPoints = points.slice(i, i + batchSize);
 
@@ -35,51 +34,24 @@ export async function openMeteoApiCaller(points, options) {
     }
     console.log("Calling URL:", url);
 
-    const promise = fetch(url)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => ({ data, startIndex: i }));
-    promises.push(promise);
+    promises.push(
+      fetch(url)
+        .then(response => {
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          return response.json();
+        })
+        .then(data => ({ data, startIndex: i }))
+    );
   }
 
   const results = await Promise.all(promises);
-
   results.forEach(({ data, startIndex }) => {
-    data.forEach((weatherData, index) => {
-      if (!('current' in weatherData) && !('hourly' in weatherData) && !('daily' in weatherData)) {
-        throw new Error('Invalid data format');
-      }
-
-      let weatherDataItem, weatherUnits, dataIndex;
-      if (options.dateType === 'current') {
-        weatherDataItem = weatherData.current;
-        weatherUnits = weatherData.current_units;
-      } else throw new Error('Not current');
-
-      const standardized = {
-        temperature: weatherDataItem.temperature_2m,
-        wind: {
-          speed: weatherDataItem.wind_speed_10m,
-          direction: weatherDataItem.wind_direction_10m
-        },
-        precipitation: weatherDataItem.precipitation,
-        weatherUnits: {
-          temperature: weatherUnits.temperature_2m,
-          windSpeed: weatherUnits.wind_speed_10m,
-          windDirection: weatherUnits.wind_direction_10m,
-          precipitation: weatherUnits.precipitation
-        },
-        timestamp: weatherDataItem.time,
-        rawData: weatherData
-      };
-
-      standardizedDataArray[startIndex + index] = standardized;
+    const weatherDataArray = Array.isArray(data) ? data : [data];
+    weatherDataArray.forEach((weatherData, index) => {
+      standardizedDataArray[startIndex + index] = parseOpenMeteo(weatherData, { timeType: options.dateType });
     });
   });
+
   console.log(standardizedDataArray);
   return standardizedDataArray;
 }
@@ -121,6 +93,10 @@ export function parseOpenMeteo(data, options){
       rawData: data
     };
   return standardizedData;
+}
+
+export async function meteoSixApiCaller(points, options) {
+  
 }
 
 export function parseMeteoSIX(results) {
