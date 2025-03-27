@@ -58,7 +58,8 @@ class DataRenderer {
             opacity: 0.3,
             controlName: 'Data Layer',
             layerControl: map.layerControl,
-            colorScale: COLOR_SCALES.temperature
+            colorScale: COLOR_SCALES.temperature,
+            demoMode: false,
         }, options);
         this.canvasLayer = null;
         this._timer = null;
@@ -118,29 +119,30 @@ class DataRenderer {
                 }
             }
 
-            // pintar los puntos de la grilla
-            const header = this.data.header;
-            const nx = header.nx;
-            const ny = header.ny;
-            const dx = header.dx;
-            const dy = header.dy;
-            const lo1 = header.lo1;
-            const la1 = header.la1;
+            if(this.options.demoMode) {
+                const header = this.data.header;
+                const nx = header.nx;
+                const ny = header.ny;
+                const dx = header.dx;
+                const dy = header.dy;
+                const lo1 = header.lo1;
+                const la1 = header.la1;
 
-            for (let i = 0; i < ny; i++) {
-                for (let j = 0; j < nx; j++) {
-                    const lat = la1 - i * dy;
-                    const lng = lo1 + j * dx;
-                    const containerPoint = this.map.latLngToContainerPoint([lat, lng]);
-                    const px = Math.round(containerPoint.x);
-                    const py = Math.round(containerPoint.y);
+                for (let i = 0; i < ny; i++) {
+                    for (let j = 0; j < nx; j++) {
+                        const lat = la1 - i * dy;
+                        const lng = lo1 + j * dx;
+                        const containerPoint = this.map.latLngToContainerPoint([lat, lng]);
+                        const px = Math.round(containerPoint.x);
+                        const py = Math.round(containerPoint.y);
 
-                    if (px >= 0 && px < width && py >= 0 && py < height) {
-                        const index = (py * width + px) * 4;
-                        data[index] = 0;
-                        data[index + 1] = 0;
-                        data[index + 2] = 0;
-                        data[index + 3] = 255;
+                        if (px >= 0 && px < width && py >= 0 && py < height) {
+                            const index = (py * width + px) * 4;
+                            data[index] = 0;
+                            data[index + 1] = 0;
+                            data[index + 2] = 0;
+                            data[index + 3] = 255;
+                        }
                     }
                 }
             }

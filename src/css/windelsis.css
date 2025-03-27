@@ -1,5 +1,21 @@
 body {
-    margin: 0px;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#map {
+    height: calc(100vh - 220px);
+    width: 80vw; /* Increased from 70vw */
+    background-color: #333;
+    position: relative;
+    margin: 0 auto; /* Center the map */
 }
 
 #heading {
@@ -7,14 +23,6 @@ body {
     padding: 20px;
     background: #333;
     color: #CCC;
-}
-
-#map {
-    height: 60vh;
-    width: 60vw;
-    background-color: #333;
-    margin: 20px auto;
-    position: relative;
 }
 
 .dark-theme {
@@ -27,21 +35,18 @@ body {
 }
 
 #mapControls {
-    position: absolute;
-    bottom: 20px;
-    left: 60px;
-    z-index: 1000;
+    width: 80vw;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 10px;
-    background: rgba(255, 255, 255, 0.535);
     padding: 15px;
-    border-radius: 8px;
+    background-color: #333333;
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    margin: 0 auto 20px auto;
 }
 
 .button-style {
-    padding: 10px 20px;
+    padding: 8px 15px;
     background-color: #3388ff;
     color: white;
     border: none;
@@ -55,11 +60,51 @@ body {
 }
 
 .input-style {
-    padding: 8px 12px;
-    background-color: #f8f9fa;
-    border: 1px solid #ddd;
+    padding: 6px 10px;
+    background-color: #444444;
+    border: 1px solid #555555;
     border-radius: 4px;
     font-family: Arial, sans-serif;
     font-size: 14px;
+    color: #ffffff;
+    max-width: 150px;
+    box-sizing: border-box;
+}
+
+label {
+    color: #ffffff;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    max-width: 100%;
+}
+
+.leaflet-container {
+    color: #333 !important;
+}
+
+.leaflet-control-layers,
+.leaflet-control-zoom {
     color: #333;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.leaflet-control-layers label {
+    color: #333;
+    margin: 0;
+}
+
+.separator {
+    border: none;
+    height: 1px;
+    background-color: #ffffff;
+    margin: 10px 0;
+    width: 100%;
 }

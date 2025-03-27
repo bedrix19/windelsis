@@ -16,10 +16,30 @@ let mapManager = new MapManager('map', openMeteoApiCaller,{
   updateDelay: 500,
 });
 
-mapManager.getCurrentData();
+document.getElementById('testCurrent').addEventListener('click', async () => mapManager.getCurrentData());
+document.getElementById('testForecast').addEventListener('click', async () => {
+  const forecastDate = document.getElementById('forecastDate').value;
+  if (!forecastDate) {
+    alert('Please select a date before continuing');
+    return;
+  }
+  mapManager.getForecastData(forecastDate, forecastDate);
+});
+document.getElementById('testForecastHour').addEventListener('click', async () => {
+  const forecastDate = document.getElementById('forecastDate').value;
+  const forecastTime = document.getElementById('forecastTime').value;
+  if(!forecastDate || !forecastTime) {
+    alert('Please select a date and an hour before continuing');
+    return;
+  }
+  mapManager.getHourlyForecast(
+    forecastDate, forecastDate,
+    forecastTime
+  );
+});
 
-document.getElementById('testMapManager').addEventListener('click', async () => {
-  //get map data to destroy and recreate the object
+document.getElementById('testDestroy').addEventListener('click', async () => {
+  // recreate the object
   let currentCenter = mapManager.map.getCenter();
   let currentZoom = mapManager.map.getZoom();
   mapManager.destroy();
@@ -33,33 +53,6 @@ document.getElementById('testMapManager').addEventListener('click', async () => 
         velocityScale: 0.008
     }
   });
-
-  let dateType;
-  if(forecastTime && forecastDate) dateType = 'forecast_hourly';
-  else if (forecastDate) dateType = 'forecast';
-
-  await mapManager.getCurrentData();
-});
-
-document.getElementById('fetchWindDataButton').addEventListener('click', () => {
-    const pointDistance = parseFloat(document.getElementById('pointDistance').value) || 1;
-    const forecastDate = document.getElementById('forecastDate').value;
-    const forecastTime = parseInt(document.getElementById('forecastTime').value);
-    const adjustment = parseInt(document.getElementById('mapAdjustment').value);
-    const windyParameters = {
-      maxVelocity: parseFloat(document.getElementById('maxVelocity').value),
-      minVelocity: parseFloat(document.getElementById('minVelocity').value),
-      velocityScale: parseFloat(document.getElementById('velocityScale').value),
-      particleAge: parseInt(document.getElementById('particleAge').value),
-      lineWidth: parseFloat(document.getElementById('lineWidth').value),
-      particleMultiplier: parseFloat(document.getElementById('particleMultiplier').value),
-      frameRate: parseInt(document.getElementById('frameRate').value)
-    };
-
-    console.log(forecastTime);
-    let dateType;
-    if(forecastTime && forecastDate) dateType = 'forecast_hourly';
-    else if (forecastDate) dateType = 'forecast';
 });
 
 document.getElementById('updateWindyParams').addEventListener('click', () => {
