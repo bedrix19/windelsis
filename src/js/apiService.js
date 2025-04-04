@@ -96,7 +96,20 @@ export function parseOpenMeteo(data, options){
 }
 
 export async function meteoSixApiCaller(points, options) {
-  
+  /*if (API === 'MeteoSIX') {
+    const coords = points.map(p => `${p.longitude},${p.latitude}`).join(';');
+    const baseUrl = 'https://servizos.meteogalicia.gal/apiv4/getNumericForecastInfo';
+    switch (dateType) {
+      case 'current':
+        url = `${baseUrl}?coords=${coords}&variables=temperature,wind&API_KEY=219XBzNU7vG87JnRXaDq6uh35DbheXH1tAx72B6ElfPoVe7S6mqWUKzSQkJuqcLl`;
+        break;
+      case 'forecast': //por probar
+        url = `${baseUrl}?coords=${coords}&startTime=${start_date}&endTime=${end_date}&variables=temperature,wind`;
+        break;
+      default:
+        throw new Error('Invalid date type for MeteoSIX');
+    }
+  }*/
 }
 
 export function parseMeteoSIX(results) {

@@ -53,6 +53,8 @@ class DataRenderer {
     constructor(map, data, options = {}) {
         this.map = map;
         this.data = data;
+        this.canvasLayer = null;
+        this._timer = null;
         this.options = Object.assign({
             pixelSize: 5,
             opacity: 0.3,
@@ -61,8 +63,6 @@ class DataRenderer {
             colorScale: COLOR_SCALES.temperature,
             demoMode: false,
         }, options);
-        this.canvasLayer = null;
-        this._timer = null;
     }
 
     init() {

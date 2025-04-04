@@ -358,7 +358,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
 
     if (options.hasOwnProperty("data")) this.options.data = options.data;
 
-    if (this._windy) {
+    if (this._windy) {console.log('windy options update', options);
       this._windy.setOptions(options);
 
       if (options.hasOwnProperty("data")) this._windy.setData(options.data);

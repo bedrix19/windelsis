@@ -1,6 +1,9 @@
 import { MapManager } from "../src/js/mapManager.js";
 import { openMeteoApiCaller } from "../src/js/apiService.js";
 
+const randomDataCheckbox = document.getElementById('randomData');
+const demoModeCheckbox = document.getElementById('demoMode');
+
 /**
  * Madrid: 40.4167, -3.7033
  * Coruña: 43.3623, -8.4104
@@ -11,10 +14,13 @@ import { openMeteoApiCaller } from "../src/js/apiService.js";
  * Tavira: 37.1318, -7.6430
  */
 let mapManager = new MapManager('map', openMeteoApiCaller,{
-  center: [43.3623, -8.4104],
+  center: [38.7223, -9.1393],
   zoom: 11,
-  updateDelay: 500,
+  randomData: randomDataCheckbox.checked,
+  demoMode: demoModeCheckbox.checked
 });
+
+const map = mapManager.map;
 
 document.getElementById('testCurrent').addEventListener('click', async () => mapManager.getCurrentData());
 document.getElementById('testForecast').addEventListener('click', async () => {
@@ -38,19 +44,19 @@ document.getElementById('testForecastHour').addEventListener('click', async () =
   );
 });
 
-document.getElementById('testDestroy').addEventListener('click', async () => {
+document.getElementById('testRecreate').addEventListener('click', async () => {
   // recreate the object
   let currentCenter = mapManager.map.getCenter();
   let currentZoom = mapManager.map.getZoom();
   mapManager.destroy();
-  mapManager = new MapManager('map', {
+  mapManager = new MapManager(map, openMeteoApiCaller, {
     center: currentCenter,   
     zoom: currentZoom,
-    updateDelay: 500,
-    pointDistance: parseFloat(document.getElementById('pointDistance').value) || undefined,
+    randomData: randomDataCheckbox.checked,
+    demoMode: demoModeCheckbox.checked,
     windyParameters: {
-        maxVelocity: 15,
-        velocityScale: 0.008
+      maxVelocity: 15,
+      velocityScale: 0.008
     }
   });
 });
@@ -66,3 +72,7 @@ document.getElementById('updateWindyParams').addEventListener('click', () => {
     frameRate: parseInt(document.getElementById('frameRate').value)
   });
 });
+
+document.getElementById('testColorScale').addEventListener('click', () => mapManager.setWindyParameters({
+  colorScale: ["rgb(255, 255, 255)"],
+})); 
