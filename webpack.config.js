@@ -7,16 +7,14 @@ const isProduction = process.env.NODE_ENV === 'production';
 const jsConfig = {
   entry: [
     './src/vendor/leaflet-velocity.js',
-    './src/js/DataRenderer.js',
-    './src/js/gridUtils.js',
-    './src/js/gridPoint.js',
     './src/js/mapManager.js'
   ],
   output: {
     filename: isProduction ? 'windelsis.min.js' : 'windelsis.js',
     path: path.resolve(__dirname, 'dist'),
     library: 'Windelsis',
-    libraryTarget: 'umd'
+    libraryTarget: 'umd',
+    globalObject: 'this',
   },
   module: {
     rules: [

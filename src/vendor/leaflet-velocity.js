@@ -358,7 +358,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
 
     if (options.hasOwnProperty("data")) this.options.data = options.data;
 
-    if (this._windy) {console.log('windy options update', options);
+    if (this._windy) {//console.log('windy options update', options);
       this._windy.setOptions(options);
 
       if (options.hasOwnProperty("data")) this._windy.setData(options.data);
@@ -407,7 +407,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
     if (this._dragTimer) clearTimeout(this._dragTimer);
     // Se usa un debounce de 200ms para no saturar el proceso durante arrastres muy rápidos.
     this._dragTimer = setTimeout(() => {
-      this._clearAndRestart();console.log('updateWindDuringDrag');
+      this._clearAndRestart();//console.log('updateWindDuringDrag');
     }, 200);
   },
 
@@ -428,7 +428,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
     //this._map.on("dragstart", self._windy.stop);
 
     // this._map.on("dragend", self._clearAndRestart);
-    console.log("zoom activated");
+    //console.log("zoom activated");
     this._map.on('drag', (event) => self._updateWindDuringDrag());
 
     this._map.on("zoomstart", self._windy.stop);
@@ -452,7 +452,7 @@ L.VelocityLayer = (L.Layer ? L.Layer : L.Class).extend({
     }
   },
   _clearAndRestart: function _clearAndRestart() {
-    console.log("clear and restart");
+    //console.log("clear and restart");
     if (this._context) this._context.clearRect(0, 0, 3000, 3000);
     if (this._windy) this._startWindy();
   },

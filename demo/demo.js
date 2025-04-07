@@ -1,5 +1,3 @@
-import { openMeteoApiCaller } from "../src/js/apiService.js";
-//import { MapManager } from "../src/js/mapManager.js";
 const { MapManager } = window.Windelsis;
 
 const randomDataCheckbox = document.getElementById('randomData');
@@ -14,7 +12,7 @@ const demoModeCheckbox = document.getElementById('demoMode');
  * Lisboa: 38.7223, -9.1393
  * Tavira: 37.1318, -7.6430
  */
-let mapManager = new MapManager('map', openMeteoApiCaller,{
+let mapManager = new MapManager('map', null,{
   center: [38.7223, -9.1393],
   zoom: 11,
   randomData: randomDataCheckbox.checked,
@@ -50,7 +48,7 @@ document.getElementById('testRecreate').addEventListener('click', async () => {
   let currentCenter = mapManager.map.getCenter();
   let currentZoom = mapManager.map.getZoom();
   mapManager.destroy();
-  mapManager = new MapManager(map, openMeteoApiCaller, {
+  mapManager = new MapManager(map, null, {
     center: currentCenter,   
     zoom: currentZoom,
     randomData: randomDataCheckbox.checked,

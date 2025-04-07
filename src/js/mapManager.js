@@ -1,10 +1,11 @@
 import { DataRenderer, COLOR_SCALES } from "./DataRenderer.js"; './DataRenderer.js';
 import GridUtils from './gridUtils.js';
 import { GridPoint } from "./gridPoint.js";
+import { openMeteoApiCaller } from './apiService.js';
 
 export class MapManager {
   constructor(mapId, apiCaller, options = {}) {
-    this.apiCaller = apiCaller;
+    this.apiCaller = apiCaller ?? openMeteoApiCaller;
     this.map = null;
     this.velocityLayer = null;
     this.temperatureRenderer = null;
