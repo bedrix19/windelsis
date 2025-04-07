@@ -1,14 +1,31 @@
-Model data:
-https://nomads.ncep.noaa.gov/
+# Windelsis
 
-A good inspiration and data source:
-https://earth.nullschool.net/about.html
+`Windelsis` is a JavaScript library for visualizing weather data on interactive maps using Leaflet. It provides tools to render temperature, precipitation, and wind velocity layers, as well as utilities for grid-based weather data management.
 
-Example of json api request to the National Centers for Environmental Information (NCEI) Access Data Service:
-https://www.ncei.noaa.gov/access/services/data/v1?dataset=global-summary-of-the-year&dataTypes=DP01,DP05,DP10,DSND,DSNW,DT00,DT32,DX32,DX70,DX90,SNOW,PRCP&stations=ASN00084027&startDate=1952-01-01&endDate=1970-12-31&includeAttributes=true&format=json
+## Features
 
-Request Web Services Token for NOAA:
-SvNwwLVCTXrHejSdyNEkeEunLYQwKDPU
+- **Weather Layers**: Visualize temperature, precipitation, and wind velocity on a map.
+- **Interactive Map**: Built on Leaflet, allowing zooming, panning, and interaction with weather data.
+- **Customizable**: Supports custom color scales, grid resolutions, and weather data sources.
+- **API Integration**: Fetch weather data from APIs like Open-Meteo.
+
+## Installation
+
+To use `Windelsis` in your project, you can build the library and include it in your application.
+
+### Build the Library
+
+1. Install dependencies:
+   ```sh
+   npm install
+
+2. Build library
+   ```sh
+   npm run build
+
+## Example
+
+Test the library, open the demo files in the demo directory in your browser.
 
 ## Reference
 
@@ -18,3 +35,7 @@ SvNwwLVCTXrHejSdyNEkeEunLYQwKDPU
 - [leaflet-velocity](https://github.com/onaci/leaflet-velocity)
 - [WindJS](https://github.com/Esri/wind-js)
 - [earth](https://github.com/cambecc/earth)
+
+## License
+
+This project is licensed under the MIT License.

@@ -1,0 +1,128 @@
+/*!***********************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./src/vendor/leaflet-velocity.css ***!
+  \***********************************************************************************/
+.leaflet-control-velocity {
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 0 5px;
+  margin: 0 !important;
+  color: #333;
+  font: 11px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
+}
+
+.velocity-overlay {
+  position: absolute;
+  z-index: 1;
+}
+/*!*************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./src/css/windelsis.css ***!
+  \*************************************************************************/
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#map {
+    height: calc(100vh - 220px);
+    width: 80vw; /* Increased from 70vw */
+    background-color: #333;
+    position: relative;
+    margin: 0 auto; /* Center the map */
+}
+
+#heading {
+    text-align: center;
+    padding: 20px;
+    background: #333;
+    color: #CCC;
+}
+
+.dark-theme {
+    background-color: #1a1a1a;
+    color: #ffffff;
+}
+
+.leaflet-canvas-layer {
+    opacity: 0.55;
+}
+
+#mapControls {
+    width: 80vw;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 15px;
+    background-color: #333333;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    margin: 0 auto 20px auto;
+}
+
+.button-style {
+    padding: 8px 15px;
+    background-color: #3388ff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.button-style:hover {
+    background-color: #2a6fcc;
+}
+
+.input-style {
+    padding: 6px 10px;
+    background-color: #444444;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    color: #ffffff;
+    max-width: 150px;
+    box-sizing: border-box;
+}
+
+label {
+    color: #ffffff;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    max-width: 100%;
+}
+
+.leaflet-container {
+    color: #333 !important;
+}
+
+.leaflet-control-layers,
+.leaflet-control-zoom {
+    color: #333;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.leaflet-control-layers label {
+    color: #333;
+    margin: 0;
+}
+
+.separator {
+    border: none;
+    height: 1px;
+    background-color: #ffffff;
+    margin: 10px 0;
+    width: 100%;
+}

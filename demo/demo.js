@@ -1,5 +1,6 @@
-import { MapManager } from "../src/js/mapManager.js";
 import { openMeteoApiCaller } from "../src/js/apiService.js";
+//import { MapManager } from "../src/js/mapManager.js";
+const { MapManager } = window.Windelsis;
 
 const randomDataCheckbox = document.getElementById('randomData');
 const demoModeCheckbox = document.getElementById('demoMode');
