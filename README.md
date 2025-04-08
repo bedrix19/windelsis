@@ -11,7 +11,7 @@
 
 ## Installation
 
-To use `Windelsis` in your project, export windelsis.js or you can build the library and include it in your application.
+To use `Windelsis` in your project, install windelsis or you can build the library and include it in your application.
 
 ### Build the Library
 
@@ -22,6 +22,12 @@ To use `Windelsis` in your project, export windelsis.js or you can build the lib
 2. Build library
    ```sh
    npm run build
+
+### npm install
+
+   ```sh
+   npm install windelsis
+   ```
 
 ## Example
 
@@ -42,9 +48,9 @@ This must be a function capable of obtaining weather data based on two parameter
 1. **An array of GridPoint objects**: Each GridPoint object should provide `latitude` and `longitude` properties.
 2. **An options object**: This object determines the type of request to be made (e.g., current weather, forecast, or hourly forecast).
 
-Have to return the weather data in a standarized format in the same order of the original array.
+Have to return the weather data in a standarized format in the same order in which the objects were received (see how openMeteoApiCaller works).
 
-If `fetch_function` is set to `null`, the library will use the default `openMeteoApiCaller` function, which fetches weather data from the Open-Meteo API which does not need an API key.
+If `fetch_function` is set to `null`, the library will use the default `openMeteoApiCaller` from `apiService.js` function, which fetches weather data from the Open-Meteo API which does not need an API key.
 
 ### options
 
@@ -80,6 +86,8 @@ The `options` parameter is an object that configures the behavior of the `MapMan
 ### Get Weather functions
    ```js
    mapManager.getCurrentData()
+
+   // not implemented in openMeteoApiCaller but just need to implement the json parse
    mapManager.getForecastData(forecastDate, forecastDate) //for now can fetch just one date for forecast
    mapManager.getHourlyForecast(forecastDate, forecastDate, forecastTime)
    ```

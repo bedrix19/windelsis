@@ -6,6 +6,25 @@
     "build": "NODE_ENV=development webpack --config webpack.config.js",
     "build:min": "NODE_ENV=production webpack --config webpack.config.js"
   },
+  "keywords": [
+    "weather",
+    "map",
+    "leaflet",
+    "visualization",
+    "wind",
+    "temperature",
+    "precipitation",
+    "GIS"
+  ],
+  "author": "bedrix",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bedrix19/windelsis"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  },
   "devDependencies": {
     "@babel/core": "^7.26.10",
     "@babel/preset-env": "^7.26.9",
