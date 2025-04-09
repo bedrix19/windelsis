@@ -39,7 +39,7 @@ export class MapManager {
       pointDistance:  options.pointDistance || null,
       maxGridPoints: options.maxGridPoints || 600,
       mapAdjustment: options.mapAdjustment || 0,
-      windyParameters: options.windyParams || this.getDefaultWindyParameters(),
+      windyParameters: {...this.getDefaultWindyParameters(), ...options.windyParams},
       dateType: options.dateType || 'current',
       start_date: options.start_date || null,
       end_date: options.end_date || null,
@@ -520,10 +520,9 @@ export class MapManager {
     return this.forceUpdate();
   }
 
-  setWindyParameters(parameters) {
+  setWindyParameters(parameters) { //console.log("######## setWindyParameters ########",parameters);
     this.options.windyParameters = { ...this.options.windyParameters, ...parameters };
-    console.log("######## setWindyParameters ########",parameters, this.options.windyParameters);
-    if (this.velocityLayer) {//console.log("Seteando parametros de windy");
+    if (this.velocityLayer) {
       this.velocityLayer.setOptions(this.options.windyParameters);
     }
   }
@@ -573,7 +572,10 @@ export class MapManager {
     }
   
     try {
-      const standardizedDataArray = await this.apiCaller(points, apiOptions);
+      let standardizedDataArray = [];
+      if (points && points.length > 0) {
+        standardizedDataArray = await this.apiCaller(points, apiOptions);
+      }
       return standardizedDataArray;
     } catch (error) {
       console.error('Fetching weather data failed:', error);

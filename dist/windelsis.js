@@ -299,9 +299,7 @@ class DataRenderer {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   meteoSixApiCaller: () => (/* binding */ meteoSixApiCaller),
 /* harmony export */   openMeteoApiCaller: () => (/* binding */ openMeteoApiCaller),
-/* harmony export */   parseMeteoSIX: () => (/* binding */ parseMeteoSIX),
 /* harmony export */   parseOpenMeteo: () => (/* binding */ parseOpenMeteo)
 /* harmony export */ });
 async function openMeteoApiCaller(points, options) {
@@ -319,10 +317,10 @@ async function openMeteoApiCaller(points, options) {
         url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation` + `&wind_speed_unit=ms`;
         break;
       case 'forecast':
-        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&start_date=${options.start_date}&end_date=${options.end_date}` + `&daily=wind_speed_10m_max,wind_direction_10m_dominant` + `&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&start_date=${options.start_date}&end_date=${options.end_date}` + `&daily=temperature_2m_max,precipitation_sum,` + `wind_speed_10m_max,wind_direction_10m_dominant` + `&wind_speed_unit=ms`;
         break;
       case 'forecast_hourly':
-        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&start_date=${options.start_date}&end_date=${options.end_date}` + `&hourly=wind_speed_10m,wind_direction_10m` + `&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&start_date=${options.start_date}&end_date=${options.end_date}` + `&hourly=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m` + `&wind_speed_unit=ms`;
         break;
       default:
         throw new Error('Invalid date type');
@@ -343,135 +341,49 @@ async function openMeteoApiCaller(points, options) {
   }) => {
     const weatherDataArray = Array.isArray(data) ? data : [data];
     weatherDataArray.forEach((weatherData, index) => {
-      standardizedDataArray[startIndex + index] = parseOpenMeteo(weatherData, {
-        timeType: options.dateType
-      });
+      standardizedDataArray[startIndex + index] = parseOpenMeteo(weatherData, options);
     });
   });
   console.log(standardizedDataArray);
   return standardizedDataArray;
 }
 function parseOpenMeteo(data, options) {
-  if (!'current' in data || !'hourly' in data || !'daily' in data) throw new Error('Invalid data format');
-  let weatherData, weatherUnits, index;
-  if (options.timeType == 'current') {
-    weatherData = data.current;
-    weatherUnits = data.current_units;
-  } else if (options.timeType == 'forecast') {
-    for (let i = 0; i < data.hourly.length; i++) {
-      if (data.hourly[i].time == options.timestamp) {
-        index = i;
-        break;
-      }
-    }
-    weatherData = data.daily[index];
-    weatherUnits = data.daily_units;
+  if (!data || !data.current && !data.hourly && !data.daily) {
+    throw new Error('Invalid data format');
   }
-  const standardizedData = {
-    temperature: weatherData.temperature_2m,
-    wind: {
-      speed: weatherData.wind_speed_10m,
-      direction: weatherData.wind_direction_10m
-    },
-    precipitation: weatherData.precipitation,
-    weatherUnits: {
-      temperature: weatherUnits.temperature_2m,
-      windSpeed: weatherUnits.wind_speed_10m,
-      windDirection: weatherUnits.wind_direction_10m,
-      precipitation: weatherUnits.precipitation
-    },
-    timestamp: weatherData.time,
-    rawData: data
+  const getWeatherData = (dataType, index = 0) => {
+    const weatherData = data[dataType];
+    const weatherUnits = data[`${dataType}_units`];
+    return {
+      temperature: weatherData.temperature_2m_max?.[index] || weatherData.temperature_2m?.[index] || weatherData.temperature_2m,
+      wind: {
+        speed: weatherData.wind_speed_10m_max?.[index] || weatherData.wind_speed_10m?.[index] || weatherData.wind_speed_10m,
+        direction: weatherData.wind_direction_10m_dominant?.[index] || weatherData.wind_direction_10m?.[index] || weatherData.wind_direction_10m
+      },
+      precipitation: weatherData.precipitation_sum?.[index] || weatherData.precipitation?.[index] || weatherData.precipitation,
+      weatherUnits: {
+        temperature: weatherUnits.temperature_2m_max || weatherUnits.temperature_2m,
+        windSpeed: weatherUnits.wind_speed_10m_max || weatherUnits.wind_speed_10m,
+        windDirection: weatherUnits.wind_direction_10m_dominant || weatherUnits.wind_direction_10m,
+        precipitation: weatherUnits.precipitation_sum || weatherUnits.precipitation
+      },
+      timestamp: weatherData.time?.[index] || weatherData.time,
+      rawData: data
+    };
   };
-  return standardizedData;
-}
-async function meteoSixApiCaller(points, options) {
-  /*if (API === 'MeteoSIX') {
-    const coords = points.map(p => `${p.longitude},${p.latitude}`).join(';');
-    const baseUrl = 'https://servizos.meteogalicia.gal/apiv4/getNumericForecastInfo';
-    switch (dateType) {
-      case 'current':
-        url = `${baseUrl}?coords=${coords}&variables=temperature,wind&API_KEY=219XBzNU7vG87JnRXaDq6uh35DbheXH1tAx72B6ElfPoVe7S6mqWUKzSQkJuqcLl`;
-        break;
-      case 'forecast': //por probar
-        url = `${baseUrl}?coords=${coords}&startTime=${start_date}&endTime=${end_date}&variables=temperature,wind`;
-        break;
-      default:
-        throw new Error('Invalid date type for MeteoSIX');
-    }
-  }*/
-}
-function parseMeteoSIX(results) {
-  // Suponemos que results es un array de objetos { data, rowIndex }
-  if (!results || results.length === 0) {
-    console.error("No se han recibido datos de MeteoSIX");
-    return null;
-  }
-  const data = results[0].data;
-  if (!data.features || data.features.length === 0) {
-    console.error("No hay features en los datos de MeteoSIX");
-    return null;
-  }
-  const feature = data.features[0];
-  const days = feature.properties.days;
-  const now = new Date();
-
-  // Variables para almacenar los datos actuales
-  let currentTemp = null;
-  let currentWind = null;
-  for (const day of days) {
-    if (!day.variables) continue;
-    for (const variable of day.variables) {
-      if (variable.name === "temperature" && !currentTemp) {
-        // Buscamos el primer valor cuya hora sea >= ahora
-        const forecast = variable.values.find(v => new Date(v.timeInstant) >= now);
-        if (forecast) {
-          currentTemp = {
-            value: forecast.value,
-            timeInstant: forecast.timeInstant,
-            modelRun: forecast.modelRun,
-            units: variable.units
-          };
-        }
+  switch (options.dateType) {
+    case 'current':
+      return getWeatherData('current');
+    case 'forecast':
+      return getWeatherData('daily', 0);
+    case 'forecast_hourly':
+      if (options.hour_index == null) {
+        throw new Error('hour_index is required for forecast_hourly');
       }
-      // Para el viento
-      else if (variable.name === "wind" && !currentWind) {
-        const forecast = variable.values.find(v => new Date(v.timeInstant) >= now);
-        if (forecast) {
-          currentWind = {
-            moduleValue: forecast.moduleValue,
-            directionValue: forecast.directionValue,
-            timeInstant: forecast.timeInstant,
-            modelRun: forecast.modelRun,
-            moduleUnits: variable.moduleUnits,
-            directionUnits: variable.directionUnits,
-            iconURL: forecast.iconURL
-          };
-        }
-      }
-    }
-    if (currentTemp && currentWind) break;
+      return getWeatherData('hourly', options.hour_index);
+    default:
+      throw new Error('Invalid date type');
   }
-  if (!currentTemp || !currentWind) {
-    console.error("No se han encontrado datos actuales de temperatura y/o viento");
-    return null;
-  }
-  const standardizedData = {
-    temperature: currentTemp.value,
-    wind: {
-      speed: currentWind.moduleValue,
-      direction: currentWind.directionValue
-    },
-    weatherUnits: {
-      temperature: currentTemp.units,
-      windSpeed: currentWind.moduleUnits,
-      windDirection: currentWind.directionUnits
-    },
-    timestamp: currentTemp.timeInstant,
-    rawData: AudioData
-  };
-  console.log(standardizedData);
-  return standardizedData;
 }
 
 /***/ }),
@@ -1929,7 +1841,10 @@ class MapManager {
       pointDistance: options.pointDistance || null,
       maxGridPoints: options.maxGridPoints || 600,
       mapAdjustment: options.mapAdjustment || 0,
-      windyParameters: options.windyParams || this.getDefaultWindyParameters(),
+      windyParameters: {
+        ...this.getDefaultWindyParameters(),
+        ...options.windyParams
+      },
       dateType: options.dateType || 'current',
       start_date: options.start_date || null,
       end_date: options.end_date || null,
@@ -2357,13 +2272,12 @@ class MapManager {
     return this.forceUpdate();
   }
   setWindyParameters(parameters) {
+    //console.log("######## setWindyParameters ########",parameters);
     this.options.windyParameters = {
       ...this.options.windyParameters,
       ...parameters
     };
-    console.log("######## setWindyParameters ########", parameters, this.options.windyParameters);
     if (this.velocityLayer) {
-      //console.log("Seteando parametros de windy");
       this.velocityLayer.setOptions(this.options.windyParameters);
     }
   }
@@ -2407,7 +2321,10 @@ class MapManager {
       return;
     }
     try {
-      const standardizedDataArray = await this.apiCaller(points, apiOptions);
+      let standardizedDataArray = [];
+      if (points && points.length > 0) {
+        standardizedDataArray = await this.apiCaller(points, apiOptions);
+      }
       return standardizedDataArray;
     } catch (error) {
       console.error('Fetching weather data failed:', error);
