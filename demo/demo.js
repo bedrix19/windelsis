@@ -12,23 +12,37 @@ const demoModeCheckbox = document.getElementById('demoMode');
  * Lisboa: 38.7223, -9.1393
  * Tavira: 37.1318, -7.6430
  */
-let mapManager = new MapManager('map', null,{
+let mapManager = new MapManager('map', null, {
   center: [38.7223, -9.1393],
   zoom: 11,
   randomData: randomDataCheckbox.checked,
-  demoMode: demoModeCheckbox.checked
+  demoMode: demoModeCheckbox.checked,
+  windyParams: {
+    lineWidth: 2.5,
+    particleMultiplier: 0.00075,
+    frameRate: 20,
+  }
 });
 
 const map = mapManager.map;
 
-document.getElementById('testCurrent').addEventListener('click', async () => mapManager.getCurrentData());
+document.getElementById('testCurrent').addEventListener('click', async () => {
+  await mapManager.getCurrentData();
+  console.log('Current data loaded');
+  console.log(mapManager.currentGrid);
+  console.log(mapManager.gridsMap);
+  }
+);
 document.getElementById('testForecast').addEventListener('click', async () => {
   const forecastDate = document.getElementById('forecastDate').value;
   if (!forecastDate) {
     alert('Please select a date before continuing');
     return;
   }
-  mapManager.getForecastData(forecastDate, forecastDate);
+  await mapManager.getForecastData(forecastDate, forecastDate);
+  console.log('Forecast data loaded');
+  console.log(mapManager.currentGrid);
+  console.log(mapManager.gridsMap);
 });
 document.getElementById('testForecastHour').addEventListener('click', async () => {
   const forecastDate = document.getElementById('forecastDate').value;
@@ -37,10 +51,10 @@ document.getElementById('testForecastHour').addEventListener('click', async () =
     alert('Please select a date and an hour before continuing');
     return;
   }
-  mapManager.getHourlyForecast(
-    forecastDate, forecastDate,
-    forecastTime
-  );
+  await mapManager.getHourlyForecast(forecastDate,forecastDate,forecastTime);
+  console.log('Hourly Forecast data loaded');
+  console.log(mapManager.currentGrid);
+  console.log(mapManager.gridsMap);
 });
 
 document.getElementById('testRecreate').addEventListener('click', async () => {
@@ -52,11 +66,7 @@ document.getElementById('testRecreate').addEventListener('click', async () => {
     center: currentCenter,   
     zoom: currentZoom,
     randomData: randomDataCheckbox.checked,
-    demoMode: demoModeCheckbox.checked,
-    windyParameters: {
-      maxVelocity: 15,
-      velocityScale: 0.008
-    }
+    demoMode: demoModeCheckbox.checked
   });
 });
 
@@ -71,7 +81,3 @@ document.getElementById('updateWindyParams').addEventListener('click', () => {
     frameRate: parseInt(document.getElementById('frameRate').value)
   });
 });
-
-document.getElementById('testColorScale').addEventListener('click', () => mapManager.setWindyParameters({
-  colorScale: ["rgb(255, 255, 255)"],
-})); 

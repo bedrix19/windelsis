@@ -1,6 +1,7 @@
 const path = require('path');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -38,7 +39,6 @@ const cssConfig = {
     './src/vendor/leaflet-velocity.css',
     './src/css/windelsis.css'
   ],
-  // El nombre del archivo JS de salida se descarta; solo nos interesa extraer el CSS.
   output: {
     filename: 'dummy.js',
     path: path.resolve(__dirname, 'dist')
@@ -56,6 +56,10 @@ const cssConfig = {
       filename: isProduction ? 'windelsis.min.css' : 'windelsis.css'
     })
   ],
+  optimization: {
+    minimize: isProduction,
+    minimizer: [new CssMinimizerPlugin()]
+  },
   mode: isProduction ? 'production' : 'development'
 };
 

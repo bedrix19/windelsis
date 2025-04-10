@@ -24,7 +24,6 @@
         <button id="testCurrent" class="button-style">Current Data</button><hr>
         <button id="testForecast" class="button-style">Forecast Data</button><hr>
         <button id="testForecastHour" class="button-style">Forecast Data Hourly</button><hr>
-        <button id="testColorScale" class="button-style">ColorScale</button><hr>
         <!--
         <label for="pointDistance">Point Distance:</label>
         <input type="number" id="pointDistance" class="input-style" value="1" step="0.0625" />
@@ -36,35 +35,37 @@
                 value="1"
                 step="1" />
         -->
-        <label for="forecastDate">Fetching Date:</label>
-        <input  type="date" 
-                id="forecastDate"
-                class="input-style"
-                min="2016-01-01" 
-                step="1" /><!-- max="unas semanas" --> 
-        <input type="number" 
-                id="forecastTime"
-                class="input-style"
-                placeholder="Set an hour (0-23)"
-                step="1" />
+        <div class="label-group">
+          <label for="forecastDate">Fetching Date:</label>
+          <input type="date" 
+                 id="forecastDate"
+                 class="input-style"
+                 min="2016-01-01" 
+                 step="1" />
+          <input type="number" 
+                 id="forecastTime"
+                 class="input-style"
+                 placeholder="Set an hour (0-23)"
+                 step="1" />
+        </div>
       </div>
       <hr class="separator">
       <div class="input-group">
         <button id="updateWindyParams" class="button-style">Update Windy Parameters</button>
-        <label for="maxVelocity">Max Velocity:</label>
+        <div class="label-group"><label for="maxVelocity">Max Velocity:</label>
         <input type="number" class="input-style" id="maxVelocity" value="10" step="1" />
-        <label for="minVelocity">Min Velocity:</label>
+        </div><div class="label-group"><label for="minVelocity">Min Velocity:</label>
         <input type="number" class="input-style" id="minVelocity" value="0" step="1" />
-        <label for="velocityScale">Velocity Scale:</label>
+        </div><div class="label-group"><label for="velocityScale">Velocity Scale:</label>
         <input type="number" class="input-style" id="velocityScale" value="0.005" step="0.01" />
-        <label for="particleAge">Particle Age:</label>
+        </div><div class="label-group"><label for="particleAge">Particle Age:</label>
         <input type="number" class="input-style" id="particleAge" value="90" step="10" />
-        <label for="lineWidth">Line Width:</label>
-        <input type="number" class="input-style" id="lineWidth" value="1" step="1" />
-        <label for="particleMultiplier">Particle Multiplier:</label>
-        <input type="number" class="input-style" id="particleMultiplier" value="0.003" step="0.005" />
-        <label for="frameRate">Frame Rate:</label>
-        <input type="number" class="input-style" id="frameRate" value="15" step="1" />
+        </div><div class="label-group"><label for="lineWidth">Line Width:</label>
+        <input type="number" class="input-style" id="lineWidth" value="2.5" step="1" />
+        </div><div class="label-group"><label for="particleMultiplier">Particle Multiplier:</label>
+        <input type="number" class="input-style" id="particleMultiplier" value="0.00075" step="0.005" />
+        </div><div class="label-group"><label for="frameRate">Frame Rate:</label>
+        <input type="number" class="input-style" id="frameRate" value="20" step="1" /></div>
       </div>
     </div>
     <div id="map"></div>

@@ -40,17 +40,22 @@ Use Windelsis to create a map with weather layers:
 
 ### map
 
-Must be the id of the map (a string) or an instance of L.Map.
+Can either be:
+
+1. **A string**: Represents the ID of the HTML element where the Leaflet map will be **created**.
+2. **An instance of `L.Map`**: Pass an existing Leaflet map instance if the map is already created.
+
+This flexibility allows you to either let `Windelsis` handle map creation or integrate it with an existing Leaflet map setup.
 
 ### fetch_function
 
-This must be a function capable of obtaining weather data based on two parameters:
-1. **An array of GridPoint objects**: Each GridPoint object should provide `latitude` and `longitude` properties.
-2. **An options object**: This object determines the type of request to be made (e.g., current weather, forecast, or hourly forecast).
+This function retrieves weather data based on two parameters:
+1. **Array of GridPoint objects**: Each object includes `latitude` and `longitude`.
+2. **Options object**: Specifies the type of request (e.g., current weather, forecast).
 
-Have to return the weather data in a standarized format in the same order in which the objects were received (see how openMeteoApiCaller works).
+It must return data in the same order as received. If `fetch_function` is `null`, the library defaults to `openMeteoApiCaller` from `apiService.js`, which fetches data from the Open-Meteo API without requiring an API key.
 
-If `fetch_function` is set to `null`, the library will use the default `openMeteoApiCaller` from `apiService.js` function, which fetches weather data from the Open-Meteo API which does not need an API key.
+This approach is flexible, allowing you to source weather data from any provider, such as a database or a meteorological API.
 
 ### options
 
@@ -83,16 +88,17 @@ The `options` parameter is an object that configures the behavior of the `MapMan
 6. **`fetchOptions`** (object, optional):
    - Additional options to pass to the `fetch_function` for API calls.
 
-### Get Weather functions
+## Get Weather functions
    ```js
    mapManager.getCurrentData()
-
-   // not implemented in openMeteoApiCaller but just need to implement the json parse
-   mapManager.getForecastData(forecastDate, forecastDate) //for now can fetch just one date for forecast
+   //for now can fetch just one date for forecast
+   mapManager.getForecastData(forecastDate, forecastDate)
    mapManager.getHourlyForecast(forecastDate, forecastDate, forecastTime)
    ```
 
-Test the library, open the demo files in the demo directory in your browser.
+## Testing
+
+Open the `demo` files in your browser. I use the [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) extension in Visual Studio Code for a quick local server setup.
 
 ## Reference
 

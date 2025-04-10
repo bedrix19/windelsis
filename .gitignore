@@ -1,7 +1,8 @@
-*.txt
-
 node_modules
 
+dist/dummy.js
+
+*.txt
 ./*.txt
 
 ./*.log
