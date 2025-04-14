@@ -3,6 +3,12 @@ const { MapManager } = window.Windelsis;
 const randomDataCheckbox = document.getElementById('randomData');
 const demoModeCheckbox = document.getElementById('demoMode');
 
+const demoWindyParams = {
+  lineWidth: 2.5,
+  particleMultiplier: 0.00075,
+  frameRate: 20,
+};
+
 /**
  * Madrid: 40.4167, -3.7033
  * Coruña: 43.3623, -8.4104
@@ -13,15 +19,11 @@ const demoModeCheckbox = document.getElementById('demoMode');
  * Tavira: 37.1318, -7.6430
  */
 let mapManager = new MapManager('map', null, {
-  center: [38.7223, -9.1393],
-  zoom: 11,
+  center: [43.3623, -8.4104],
+  zoom: 10,
   randomData: randomDataCheckbox.checked,
   demoMode: demoModeCheckbox.checked,
-  windyParams: {
-    lineWidth: 2.5,
-    particleMultiplier: 0.00075,
-    frameRate: 20,
-  }
+  windyParams: demoWindyParams
 });
 
 const map = mapManager.map;
@@ -66,7 +68,8 @@ document.getElementById('testRecreate').addEventListener('click', async () => {
     center: currentCenter,   
     zoom: currentZoom,
     randomData: randomDataCheckbox.checked,
-    demoMode: demoModeCheckbox.checked
+    demoMode: demoModeCheckbox.checked,
+    windyParams: demoWindyParams
   });
 });
 
