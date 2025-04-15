@@ -163,7 +163,7 @@ L.Control.Velocity = L.Control.extend({
     this._container = L.DomUtil.create("div", "leaflet-control-velocity");
     L.DomEvent.disableClickPropagation(this._container);
     map.on("mousemove", this._onMouseMove, this);
-    this._container.innerHTML = this.options.emptyString;
+    //this._container.innerHTML = this.options.emptyString;
     if (this.options.leafletVelocity.options.onAdd) this.options.leafletVelocity.options.onAdd();
     return this._container;
   },
@@ -258,7 +258,7 @@ L.Control.Velocity = L.Control.extend({
     var gridValue = this.options.leafletVelocity._windy.interpolatePoint(pos.lng, pos.lat);
 
     var htmlOut = "";
-
+/*
     if (gridValue && !isNaN(gridValue[0]) && !isNaN(gridValue[1]) && gridValue[2]) {
       var deg = self.vectorToDegrees(gridValue[0], gridValue[1], this.options.angleConvention);
       var cardinal = this.options.showCardinal ? " (".concat(self.degreesToCardinalDirection(deg), ") ") : '';
@@ -266,7 +266,7 @@ L.Control.Velocity = L.Control.extend({
     } else {
       htmlOut = this.options.emptyString;
     }
-
+*/
     self._container.innerHTML = htmlOut;
   }
 });

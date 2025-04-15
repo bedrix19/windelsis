@@ -9,6 +9,8 @@
 - **Customizable**: Supports custom color scales, grid resolutions, and weather data sources.
 - **API Integration**: Fetch weather data from APIs (like Open-Meteo in the demo).
 
+<!-- To do: ![Screenshot](/demo.gif?raw=true) -->
+
 ## Installation
 
 To use `Windelsis` in your project, install windelsis or you can build the library and include it in your application.

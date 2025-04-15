@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <title>LeafletVelocity Demo</title>
     <meta charset="utf-8" />
@@ -12,12 +12,7 @@
       <div class="input-group">
         <div class="checkbox-group">
           <label for="randomData">
-            <input type="checkbox" id="randomData" class="input-style" checked/>
-            Random Data
-          </label>
-          <label for="demoMode">
-            <input type="checkbox" id="demoMode" class="input-style"/>
-            Demo Mode
+            <input type="checkbox" id="randomData" class="input-style" checked>Random Data</input>
           </label>
         </div>
         <button id="testRecreate" class="button-style">ReCreate</button><hr>
@@ -45,6 +40,7 @@
           <input type="number" 
                  id="forecastTime"
                  class="input-style"
+                 min="0"
                  placeholder="Set an hour (0-23)"
                  step="1" />
         </div>

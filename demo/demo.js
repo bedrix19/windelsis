@@ -1,7 +1,7 @@
 const { MapManager } = window.Windelsis;
 
 const randomDataCheckbox = document.getElementById('randomData');
-const demoModeCheckbox = document.getElementById('demoMode');
+const demoModeCheckbox = false;
 
 const demoWindyParams = {
   lineWidth: 2.5,
@@ -22,11 +22,14 @@ let mapManager = new MapManager('map', null, {
   center: [43.3623, -8.4104],
   zoom: 10,
   randomData: randomDataCheckbox.checked,
-  demoMode: demoModeCheckbox.checked,
+  demoMode: demoModeCheckbox,
   windyParams: demoWindyParams
 });
 
 const map = mapManager.map;
+
+await mapManager.getCurrentData();
+mapManager.velocityLayer.addTo(map);
 
 document.getElementById('testCurrent').addEventListener('click', async () => {
   await mapManager.getCurrentData();
@@ -49,8 +52,8 @@ document.getElementById('testForecast').addEventListener('click', async () => {
 document.getElementById('testForecastHour').addEventListener('click', async () => {
   const forecastDate = document.getElementById('forecastDate').value;
   const forecastTime = document.getElementById('forecastTime').value;
-  if(!forecastDate || !forecastTime) {
-    alert('Please select a date and an hour before continuing');
+  if(!forecastDate || !forecastTime || forecastTime < 0 || forecastTime > 23) {
+    alert('Please select a date and an valid hour (0-23) before continuing');
     return;
   }
   await mapManager.getHourlyForecast(forecastDate,forecastDate,forecastTime);
@@ -68,7 +71,7 @@ document.getElementById('testRecreate').addEventListener('click', async () => {
     center: currentCenter,   
     zoom: currentZoom,
     randomData: randomDataCheckbox.checked,
-    demoMode: demoModeCheckbox.checked,
+    demoMode: demoModeCheckbox,
     windyParams: demoWindyParams
   });
 });

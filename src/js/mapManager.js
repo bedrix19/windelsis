@@ -395,13 +395,13 @@ export class MapManager {
       },
     });
 
-    this.layerControl.addOverlay(this.velocityLayer, "Wind Layer"); // Añadir la capa
+    this.layerControl.addOverlay(this.velocityLayer, "Wind Layer"); // Add the layer
     this.velocityLayer.setOptions(this.options.windyParameters);
   }
 
   forceUpdate() {
-    // Check if the is new points in this.currentGrid.grid
-    this.updateWeatherData().then(() => {
+    // (to-do) Check if the is new points in this.currentGrid.grid
+    this.updateWeatherData().then(() => { console.log(this.currentGrid.grid);
       this.updateTemperatureData();
       this.updatePrecipitationData();
       this.updateWindData();

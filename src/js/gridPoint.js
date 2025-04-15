@@ -6,7 +6,7 @@ export class GridPoint {
       this.longitude = longitude;
       this.id = GridUtils.generatePointKey(latitude,longitude);
       this.weatherData = {
-        weather_units: {
+        weather_units: { // data format that we use
           temperature: '°C',
           wind_speed: 'm/s',
           wind_direction: '°',
@@ -28,11 +28,21 @@ export class GridPoint {
     }
   
     setWeatherData(data) {
-      this.weatherData = data;
+      this.weatherData = {
+        ...data,
+        temperature: data.temperature ?? 0,
+        wind: {
+          speed: data.wind?.speed ?? 0,
+          direction: data.wind?.direction ?? 0,
+        },
+        precipitation: data.precipitation ?? 0,
+        timestamp: data.timestamp ?? null,
+        rawData: data.rawData ?? null,
+      };
       if (this.weatherData.wind.speed !== null && this.weatherData.wind.direction !== null) {
-        const { u, v } = GridUtils.convertWindDirection(this.weatherData.wind.speed, this.weatherData.wind.direction);
-        this.windComponents.u = u;
-        this.windComponents.v = v;
+      const { u, v } = GridUtils.convertWindDirection(this.weatherData.wind.speed, this.weatherData.wind.direction);
+      this.windComponents.u = u;
+      this.windComponents.v = v;
       }
     }
   

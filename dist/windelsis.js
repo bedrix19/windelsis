@@ -344,7 +344,6 @@ async function openMeteoApiCaller(points, options) {
       standardizedDataArray[startIndex + index] = parseOpenMeteo(weatherData, options);
     });
   });
-  console.log(standardizedDataArray);
   return standardizedDataArray;
 }
 function parseOpenMeteo(data, options) {
@@ -357,17 +356,17 @@ function parseOpenMeteo(data, options) {
     return {
       temperature: weatherData.temperature_2m_max?.[index] ?? weatherData.temperature_2m?.[index] ?? weatherData.temperature_2m,
       wind: {
-        speed: weatherData.wind_speed_10m_max?.[index] || weatherData.wind_speed_10m?.[index] || weatherData.wind_speed_10m,
-        direction: weatherData.wind_direction_10m_dominant?.[index] || weatherData.wind_direction_10m?.[index] || weatherData.wind_direction_10m
+        speed: weatherData.wind_speed_10m_max?.[index] ?? weatherData.wind_speed_10m?.[index] ?? weatherData.wind_speed_10m,
+        direction: weatherData.wind_direction_10m_dominant?.[index] ?? weatherData.wind_direction_10m?.[index] ?? weatherData.wind_direction_10m
       },
       precipitation: weatherData.precipitation_sum?.[index] ?? weatherData.precipitation?.[index] ?? weatherData.precipitation,
       weatherUnits: {
-        temperature: weatherUnits.temperature_2m_max || weatherUnits.temperature_2m,
-        windSpeed: weatherUnits.wind_speed_10m_max || weatherUnits.wind_speed_10m,
-        windDirection: weatherUnits.wind_direction_10m_dominant || weatherUnits.wind_direction_10m,
-        precipitation: weatherUnits.precipitation_sum || weatherUnits.precipitation
+        temperature: weatherUnits.temperature_2m_max ?? weatherUnits.temperature_2m,
+        windSpeed: weatherUnits.wind_speed_10m_max ?? weatherUnits.wind_speed_10m,
+        windDirection: weatherUnits.wind_direction_10m_dominant ?? weatherUnits.wind_direction_10m,
+        precipitation: weatherUnits.precipitation_sum ?? weatherUnits.precipitation
       },
-      timestamp: weatherData.time?.[index] || weatherData.time,
+      timestamp: weatherData.time?.[index] ?? weatherData.time,
       rawData: data
     };
   };
@@ -407,6 +406,7 @@ class GridPoint {
     this.id = _gridUtils_js__WEBPACK_IMPORTED_MODULE_0__["default"].generatePointKey(latitude, longitude);
     this.weatherData = {
       weather_units: {
+        // data format that we use
         temperature: '°C',
         wind_speed: 'm/s',
         wind_direction: '°',
@@ -427,7 +427,17 @@ class GridPoint {
     };
   }
   setWeatherData(data) {
-    this.weatherData = data;
+    this.weatherData = {
+      ...data,
+      temperature: data.temperature ?? 0,
+      wind: {
+        speed: data.wind?.speed ?? 0,
+        direction: data.wind?.direction ?? 0
+      },
+      precipitation: data.precipitation ?? 0,
+      timestamp: data.timestamp ?? null,
+      rawData: data.rawData ?? null
+    };
     if (this.weatherData.wind.speed !== null && this.weatherData.wind.direction !== null) {
       const {
         u,
@@ -1042,7 +1052,7 @@ L.Control.Velocity = L.Control.extend({
     this._container = L.DomUtil.create("div", "leaflet-control-velocity");
     L.DomEvent.disableClickPropagation(this._container);
     map.on("mousemove", this._onMouseMove, this);
-    this._container.innerHTML = this.options.emptyString;
+    //this._container.innerHTML = this.options.emptyString;
     if (this.options.leafletVelocity.options.onAdd) this.options.leafletVelocity.options.onAdd();
     return this._container;
   },
@@ -1129,13 +1139,15 @@ L.Control.Velocity = L.Control.extend({
     var pos = this.options.leafletVelocity._map.containerPointToLatLng(L.point(e.containerPoint.x, e.containerPoint.y));
     var gridValue = this.options.leafletVelocity._windy.interpolatePoint(pos.lng, pos.lat);
     var htmlOut = "";
-    if (gridValue && !isNaN(gridValue[0]) && !isNaN(gridValue[1]) && gridValue[2]) {
-      var deg = self.vectorToDegrees(gridValue[0], gridValue[1], this.options.angleConvention);
-      var cardinal = this.options.showCardinal ? " (".concat(self.degreesToCardinalDirection(deg), ") ") : '';
-      htmlOut = "<strong> ".concat(this.options.velocityType, " ").concat(this.options.directionString, ": </strong> ").concat(deg.toFixed(2), "\xB0").concat(cardinal, ", <strong> ").concat(this.options.velocityType, " ").concat(this.options.speedString, ": </strong> ").concat(self.vectorToSpeed(gridValue[0], gridValue[1], this.options.speedUnit).toFixed(2), " ").concat(this.options.speedUnit);
-    } else {
-      htmlOut = this.options.emptyString;
-    }
+    /*
+        if (gridValue && !isNaN(gridValue[0]) && !isNaN(gridValue[1]) && gridValue[2]) {
+          var deg = self.vectorToDegrees(gridValue[0], gridValue[1], this.options.angleConvention);
+          var cardinal = this.options.showCardinal ? " (".concat(self.degreesToCardinalDirection(deg), ") ") : '';
+          htmlOut = "<strong> ".concat(this.options.velocityType, " ").concat(this.options.directionString, ": </strong> ").concat(deg.toFixed(2), "\xB0").concat(cardinal, ", <strong> ").concat(this.options.velocityType, " ").concat(this.options.speedString, ": </strong> ").concat(self.vectorToSpeed(gridValue[0], gridValue[1], this.options.speedUnit).toFixed(2), " ").concat(this.options.speedUnit);
+        } else {
+          htmlOut = this.options.emptyString;
+        }
+    */
     self._container.innerHTML = htmlOut;
   }
 });
@@ -2175,12 +2187,13 @@ class MapManager {
         emptyString: "No velocity data"
       }
     });
-    this.layerControl.addOverlay(this.velocityLayer, "Wind Layer"); // Añadir la capa
+    this.layerControl.addOverlay(this.velocityLayer, "Wind Layer"); // Add the layer
     this.velocityLayer.setOptions(this.options.windyParameters);
   }
   forceUpdate() {
-    // Check if the is new points in this.currentGrid.grid
+    // (to-do) Check if the is new points in this.currentGrid.grid
     this.updateWeatherData().then(() => {
+      console.log(this.currentGrid.grid);
       this.updateTemperatureData();
       this.updatePrecipitationData();
       this.updateWindData();
