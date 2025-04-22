@@ -29,6 +29,7 @@ export class MapManager {
       zoomend: null,
       click: null,
     },
+    this.handlersPaused = false;
     this.options = {
       randomData: options.randomData ?? true,
       demoMode: options.demoMode ?? true,
@@ -79,7 +80,7 @@ export class MapManager {
         "Precipitation": this.precipitationRenderer.canvasLayer,
         "Wind": this.velocityLayer
       }
-      L.control.layers(null, weatherLayers).addTo(this.map);
+      L.control.layers(null, weatherLayers, { position: 'topleft' }).addTo(this.map);
     }
 
     // Initialize event handlers
@@ -172,10 +173,12 @@ export class MapManager {
     const precipitation = interpolate(p1.weatherData.precipitation, p2.weatherData.precipitation, p3.weatherData.precipitation, p4.weatherData.precipitation);
     const windSpeed = interpolate(p1.weatherData.wind.speed, p2.weatherData.wind.speed, p3.weatherData.wind.speed, p4.weatherData.wind.speed);
     const windDirection = interpolate(p1.weatherData.wind.direction, p2.weatherData.wind.direction, p3.weatherData.wind.direction, p4.weatherData.wind.direction);
+    const precipitationProb = interpolate(p1.weatherData.precipitation_prob, p2.weatherData.precipitation_prob, p3.weatherData.precipitation_prob, p4.weatherData.precipitation_prob);
 
     return {
       temperature,
       precipitation,
+      precipitationProb,
       wind: {
         speed: windSpeed,
         direction: windDirection
@@ -194,7 +197,7 @@ export class MapManager {
       'OpenStreetMap': osm,
       'Carto Db Dark': cartoDbDark,
       'cartoDbLight': cartoDbLight,
-    }).addTo(this.map);
+    },null,{ position: 'topleft' }).addTo(this.map);
 
     cartoDbDark.addTo(this.map);
   }
@@ -304,7 +307,7 @@ export class MapManager {
       const weatherData = this.getWeatherDataAt(lat, lng);
       var popup = L.popup({
         closeOnClick: true,
-        className: 'own-popup' // CSS class
+        className: 'windelsis-popup' // CSS class
       })
       .setLatLng(e.latlng)
       .setContent(
@@ -313,7 +316,8 @@ export class MapManager {
         `Lng: ${lng.toFixed(5)}<br>` +
         `<b>Temperature:</b> ${weatherData.temperature.toFixed(2)}°C<br>` +
         `<b>Precipitation:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` +
-        `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°`
+        `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°<br>` +
+        `<b>Precipitation Probability:</b> ${weatherData.precipitationProb.toFixed(2)}%`
       )
       .openOn(map); 
     }, 300);
@@ -321,6 +325,28 @@ export class MapManager {
     map.on('moveend', this.eventHandlers.moveend);
     map.on('zoomend', this.eventHandlers.zoomend);
     map.on('click', this.eventHandlers.click);
+  }
+
+  pauseHandlers() {
+    if (this.handlersPaused) return;
+    this.map.off('moveend', this.eventHandlers.moveend);
+    this.map.off('zoomend', this.eventHandlers.zoomend);
+    this.handlersPaused = true;
+    console.log('Handlers paused');
+  }
+
+  resumeHandlers() {
+    if (!this.handlersPaused) return;
+    this.map.on('moveend', this.eventHandlers.moveend);
+    this.map.on('zoomend', this.eventHandlers.zoomend);
+    this.handlersPaused = false;
+    console.log('Handlers resumed');
+  }
+
+  toggleUpdates() {
+    if (this.handlersPaused) this.resumeHandlers();
+    else this.pauseHandlers();
+    return this.handlersPaused;
   }
   
   addLayerControlListeners(){

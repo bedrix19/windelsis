@@ -14,21 +14,21 @@ export async function openMeteoApiCaller(points, options) {
     switch (options.dateType) {
       case 'current':
         url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` +
-              `&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation` +
-              `&wind_speed_unit=ms`;
+              `&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,` +
+              `precipitation_probability&wind_speed_unit=ms`;
         break;
         case 'forecast':
           url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` +
                 `&start_date=${options.start_date}&end_date=${options.end_date}` +
                 `&daily=temperature_2m_max,precipitation_sum,` +
-                `wind_speed_10m_max,wind_direction_10m_dominant` +
-                `&wind_speed_unit=ms`;
+                `wind_speed_10m_max,wind_direction_10m_dominant,` +
+                `precipitation_probability_max&wind_speed_unit=ms`;
           break;
         case 'forecast_hourly':
           url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` +
                 `&start_date=${options.start_date}&end_date=${options.end_date}` +
-                `&hourly=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m` +
-                `&wind_speed_unit=ms`;
+                `&hourly=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m,` +
+                `precipitation_probability&wind_speed_unit=ms`;
           break;
       default:
         throw new Error('Invalid date type');
@@ -72,11 +72,13 @@ export function parseOpenMeteo(data, options) {
         direction: weatherData.wind_direction_10m_dominant?.[index] ?? weatherData.wind_direction_10m?.[index] ?? weatherData.wind_direction_10m
       },
       precipitation: weatherData.precipitation_sum?.[index] ?? weatherData.precipitation?.[index] ?? weatherData.precipitation,
+      precipitation_prob: weatherData.precipitation_probability_max?.[index] ?? weatherData.precipitation_probability?.[index] ?? weatherData.precipitation_probability,
       weatherUnits: {
         temperature: weatherUnits.temperature_2m_max ?? weatherUnits.temperature_2m,
         windSpeed: weatherUnits.wind_speed_10m_max ?? weatherUnits.wind_speed_10m,
         windDirection: weatherUnits.wind_direction_10m_dominant ?? weatherUnits.wind_direction_10m,
         precipitation: weatherUnits.precipitation_sum ?? weatherUnits.precipitation,
+        precipitationProb: weatherUnits.precipitation_probability_max ?? weatherUnits.precipitation_probability ?? '%',
       },
       timestamp: weatherData.time?.[index] ?? weatherData.time,
       rawData: data,

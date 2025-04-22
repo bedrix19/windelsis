@@ -10,7 +10,8 @@ export class GridPoint {
           temperature: '°C',
           wind_speed: 'm/s',
           wind_direction: '°',
-          precipitation: 'mm'
+          precipitation: 'mm',
+          precipitation_prob: '%',
         },
         temperature: null,
         wind: {
@@ -18,6 +19,7 @@ export class GridPoint {
           direction: null,
         },
         precipitation: null,
+        precipitation_prob: null,
         timestamp: null,
         rawData: null,
       };
@@ -36,6 +38,7 @@ export class GridPoint {
           direction: data.wind?.direction ?? 0,
         },
         precipitation: data.precipitation ?? 0,
+        precipitation_prob: data.precipitation_prob ?? 0,
         timestamp: data.timestamp ?? null,
         rawData: data.rawData ?? null,
       };

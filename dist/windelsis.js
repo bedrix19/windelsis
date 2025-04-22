@@ -314,13 +314,13 @@ async function openMeteoApiCaller(points, options) {
     let url = '';
     switch (options.dateType) {
       case 'current':
-        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation` + `&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,` + `precipitation_probability&wind_speed_unit=ms`;
         break;
       case 'forecast':
-        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&start_date=${options.start_date}&end_date=${options.end_date}` + `&daily=temperature_2m_max,precipitation_sum,` + `wind_speed_10m_max,wind_direction_10m_dominant` + `&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&start_date=${options.start_date}&end_date=${options.end_date}` + `&daily=temperature_2m_max,precipitation_sum,` + `wind_speed_10m_max,wind_direction_10m_dominant,` + `precipitation_probability_max&wind_speed_unit=ms`;
         break;
       case 'forecast_hourly':
-        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&start_date=${options.start_date}&end_date=${options.end_date}` + `&hourly=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m` + `&wind_speed_unit=ms`;
+        url = `${baseUrl}?latitude=${latParams}&longitude=${lonParams}` + `&start_date=${options.start_date}&end_date=${options.end_date}` + `&hourly=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m,` + `precipitation_probability&wind_speed_unit=ms`;
         break;
       default:
         throw new Error('Invalid date type');
@@ -360,11 +360,13 @@ function parseOpenMeteo(data, options) {
         direction: weatherData.wind_direction_10m_dominant?.[index] ?? weatherData.wind_direction_10m?.[index] ?? weatherData.wind_direction_10m
       },
       precipitation: weatherData.precipitation_sum?.[index] ?? weatherData.precipitation?.[index] ?? weatherData.precipitation,
+      precipitation_prob: weatherData.precipitation_probability_max?.[index] ?? weatherData.precipitation_probability?.[index] ?? weatherData.precipitation_probability,
       weatherUnits: {
         temperature: weatherUnits.temperature_2m_max ?? weatherUnits.temperature_2m,
         windSpeed: weatherUnits.wind_speed_10m_max ?? weatherUnits.wind_speed_10m,
         windDirection: weatherUnits.wind_direction_10m_dominant ?? weatherUnits.wind_direction_10m,
-        precipitation: weatherUnits.precipitation_sum ?? weatherUnits.precipitation
+        precipitation: weatherUnits.precipitation_sum ?? weatherUnits.precipitation,
+        precipitationProb: weatherUnits.precipitation_probability_max ?? weatherUnits.precipitation_probability ?? '%'
       },
       timestamp: weatherData.time?.[index] ?? weatherData.time,
       rawData: data
@@ -410,7 +412,8 @@ class GridPoint {
         temperature: '°C',
         wind_speed: 'm/s',
         wind_direction: '°',
-        precipitation: 'mm'
+        precipitation: 'mm',
+        precipitation_prob: '%'
       },
       temperature: null,
       wind: {
@@ -418,6 +421,7 @@ class GridPoint {
         direction: null
       },
       precipitation: null,
+      precipitation_prob: null,
       timestamp: null,
       rawData: null
     };
@@ -435,6 +439,7 @@ class GridPoint {
         direction: data.wind?.direction ?? 0
       },
       precipitation: data.precipitation ?? 0,
+      precipitation_prob: data.precipitation_prob ?? 0,
       timestamp: data.timestamp ?? null,
       rawData: data.rawData ?? null
     };
@@ -1843,7 +1848,8 @@ class MapManager {
       moveend: null,
       zoomend: null,
       click: null
-    }, this.options = {
+    }, this.handlersPaused = false;
+    this.options = {
       randomData: options.randomData ?? true,
       demoMode: options.demoMode ?? true,
       center: options.center || [42.8, -8],
@@ -1894,7 +1900,9 @@ class MapManager {
         "Precipitation": this.precipitationRenderer.canvasLayer,
         "Wind": this.velocityLayer
       };
-      L.control.layers(null, weatherLayers).addTo(this.map);
+      L.control.layers(null, weatherLayers, {
+        position: 'topleft'
+      }).addTo(this.map);
     }
 
     // Initialize event handlers
@@ -1983,9 +1991,11 @@ class MapManager {
     const precipitation = interpolate(p1.weatherData.precipitation, p2.weatherData.precipitation, p3.weatherData.precipitation, p4.weatherData.precipitation);
     const windSpeed = interpolate(p1.weatherData.wind.speed, p2.weatherData.wind.speed, p3.weatherData.wind.speed, p4.weatherData.wind.speed);
     const windDirection = interpolate(p1.weatherData.wind.direction, p2.weatherData.wind.direction, p3.weatherData.wind.direction, p4.weatherData.wind.direction);
+    const precipitationProb = interpolate(p1.weatherData.precipitation_prob, p2.weatherData.precipitation_prob, p3.weatherData.precipitation_prob, p4.weatherData.precipitation_prob);
     return {
       temperature,
       precipitation,
+      precipitationProb,
       wind: {
         speed: windSpeed,
         direction: windDirection
@@ -2002,6 +2012,8 @@ class MapManager {
       'OpenStreetMap': osm,
       'Carto Db Dark': cartoDbDark,
       'cartoDbLight': cartoDbLight
+    }, null, {
+      position: 'topleft'
     }).addTo(this.map);
     cartoDbDark.addTo(this.map);
   }
@@ -2102,12 +2114,30 @@ class MapManager {
       const weatherData = this.getWeatherDataAt(lat, lng);
       var popup = L.popup({
         closeOnClick: true,
-        className: 'own-popup' // CSS class
-      }).setLatLng(e.latlng).setContent(`<b>Coordinates:</b><br>` + `Lat: ${lat.toFixed(5)}<br>` + `Lng: ${lng.toFixed(5)}<br>` + `<b>Temperature:</b> ${weatherData.temperature.toFixed(2)}°C<br>` + `<b>Precipitation:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` + `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°`).openOn(map);
+        className: 'windelsis-popup' // CSS class
+      }).setLatLng(e.latlng).setContent(`<b>Coordinates:</b><br>` + `Lat: ${lat.toFixed(5)}<br>` + `Lng: ${lng.toFixed(5)}<br>` + `<b>Temperature:</b> ${weatherData.temperature.toFixed(2)}°C<br>` + `<b>Precipitation:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` + `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°<br>` + `<b>Precipitation Probability:</b> ${weatherData.precipitationProb.toFixed(2)}%`).openOn(map);
     }, 300);
     map.on('moveend', this.eventHandlers.moveend);
     map.on('zoomend', this.eventHandlers.zoomend);
     map.on('click', this.eventHandlers.click);
+  }
+  pauseHandlers() {
+    if (this.handlersPaused) return;
+    this.map.off('moveend', this.eventHandlers.moveend);
+    this.map.off('zoomend', this.eventHandlers.zoomend);
+    this.handlersPaused = true;
+    console.log('Handlers paused');
+  }
+  resumeHandlers() {
+    if (!this.handlersPaused) return;
+    this.map.on('moveend', this.eventHandlers.moveend);
+    this.map.on('zoomend', this.eventHandlers.zoomend);
+    this.handlersPaused = false;
+    console.log('Handlers resumed');
+  }
+  toggleUpdates() {
+    if (this.handlersPaused) this.resumeHandlers();else this.pauseHandlers();
+    return this.handlersPaused;
   }
   addLayerControlListeners() {
     this.map.on("overlayadd", e => {

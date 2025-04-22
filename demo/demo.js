@@ -87,3 +87,10 @@ document.getElementById('updateWindyParams').addEventListener('click', () => {
     frameRate: parseInt(document.getElementById('frameRate').value)
   });
 });
+
+document.getElementById('toggleUpdates').addEventListener('click', () => {
+  console.log('Toggling updates');
+  const button = document.getElementById('toggleUpdates');
+  const isPaused = mapManager.toggleUpdates();
+  button.textContent = isPaused ? 'Resume Updates' : 'Pause Updates';
+});
