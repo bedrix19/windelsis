@@ -87,6 +87,18 @@ The `options` parameter is an object that configures the behavior of the `MapMan
      - **`particleMultiplier`** (number): Multiplier for the number of particles.
      - **`frameRate`** (number): Frame rate for the animation.
 
+6. **`maxBounds`** (`[[lat1, lng1], [lat2, lng2]]`, optional):
+   - Defines the geographical bounds that restrict the map's view using two diagonally opposite corners of the rectangle.
+   - Default: `null` (no bounds).
+
+7. **`pointDistance`** (number, optional):
+   - Specifies the minimum distance in ° between grid points for weather data. Will ignore maxGridPoints if set.
+   - Default: `null` (if not set, windelsis calculates it based on maxGrindPoints and the limits of the map).
+
+8. **`maxGridPoints`** (number, optional):
+   - Sets the maximum number of grid points to be processed for weather data visualization.
+   - Default: `600`.
+
 ## Get Weather functions
    ```js
    mapManager.getCurrentData()

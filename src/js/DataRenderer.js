@@ -1,6 +1,6 @@
 function getColorForValue(value, colorScale) {
-    if (value == null || value == undefined) value = 0; // Default to 0 if no value is provided
-
+    if(value == null) return null;
+    
     // if value is less than the first value in the scale, return the first color
     if (value <= colorScale[0].value) {
         const [r, g, b] = colorScale[0].color;
@@ -89,7 +89,7 @@ class DataRenderer {
 
     onDrawLayer(info) {
         if (!this.data || !this.data.data || this.data.data.length === 0) {
-            console.log(this.data, 'No hay datos disponibles para dibujar');
+            console.log(this.data, 'No available data to draw');
             return;
         }
 
@@ -111,6 +111,7 @@ class DataRenderer {
                 for (let x = 0; x < width; x++) {
                     const latLng = this.map.containerPointToLatLng([x, y]);
                     const value = this.interpolateValue(latLng.lat, latLng.lng);
+                    if (value == null) continue;
                     const { r, g, b } = getColorForValue(value, this.options.colorScale);
                     const a = Math.floor(this.options.opacity * 255);;
                     const index = (y * width + x) * 4;
@@ -183,9 +184,9 @@ class DataRenderer {
 
     update(data) {
         this.data = data;
-        if (this.canvasLayer) {
+        if (this.canvasLayer && this.map.hasLayer(this.canvasLayer)){
             this.canvasLayer.needRedraw();
-        }
+        }    
     }
 
     _clearTemperature() {

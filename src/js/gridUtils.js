@@ -81,9 +81,13 @@ function calculateOptimalPointDistance(bounds, maxPoints = 150) {
 }
 
 // get map bounds coordinates with a given adjustment (multiples of MULTIPLE)
-function getMapBoundsCoordinates(map, adjustment = 0) {
+function getMapBoundsCoordinates(map, options) {
   const MULTIPLE = 0.5;
-  const bounds = map.getBounds();
+  const adjustment = options.mapAdjustment ?? 0;
+  var bounds;
+  if(options.maxBounds)
+    bounds = L.latLngBounds(L.latLng(options.maxBounds[0]), L.latLng(options.maxBounds[1]));
+  else bounds = map.getBounds();
   var southWest = bounds.getSouthWest();
   var northEast = bounds.getNorthEast();
 
@@ -284,8 +288,8 @@ function calculateGridParameters(bounds, pointDistance=0.0625) {
   return { nx, ny, dx, dy };
 }
 
-function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, demoMode) {//gridLimits=mapBounds => _northEast y _southWest
-  if(demoMode){
+function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, options) {//gridLimits=mapBounds => _northEast y _southWest
+  if(options.demoMode){
     console.log("northWest", gridLimits.getNorthWest());L.marker(gridLimits.getNorthWest()).addTo(map);
     console.log("northEast", gridLimits.getNorthEast());L.marker(gridLimits.getNorthEast()).addTo(map);
     console.log("southWest", gridLimits.getSouthWest());L.marker(gridLimits.getSouthWest()).addTo(map);
@@ -294,7 +298,7 @@ function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, demoMode) {/
 
   // Datos para la cuadricula
   const { nx, ny, dx, dy } = calculateGridParameters(gridLimits, pointDistance);
-  if(demoMode) console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
+  if(options.demoMode) console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
 
   // Generar las coordenadas de los puntos
   const points = [];
@@ -315,13 +319,14 @@ function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, demoMode) {/
       count1++;
     }
   }
-  if(demoMode){
+  if(options.demoMode){
     console.log("Puntos generados:", count);
     console.log("Puntos obviados:", count1 - count);
   }
 
   return {
     bounds: gridLimits,
+    pointDistance: pointDistance,
     grid: points,
     gridPointsMap: gridPointsMap,
     dx: dx,

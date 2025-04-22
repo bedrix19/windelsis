@@ -24,7 +24,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   DataRenderer: () => (/* binding */ DataRenderer)
 /* harmony export */ });
 function getColorForValue(value, colorScale) {
-  // Si el valor está fuera de rango, se retorna el color del extremo correspondiente
+  if (value == null) return null;
+
+  // if value is less than the first value in the scale, return the first color
   if (value <= colorScale[0].value) {
     const [r, g, b] = colorScale[0].color;
     return {
@@ -42,7 +44,7 @@ function getColorForValue(value, colorScale) {
     };
   }
 
-  // Buscar entre qué dos puntos se encuentra el valor y hacer interpolación
+  // find the two colors that the value is between
   for (let i = 0; i < colorScale.length - 1; i++) {
     const current = colorScale[i];
     const next = colorScale[i + 1];
@@ -157,7 +159,7 @@ class DataRenderer {
     }, options);
   }
   init() {
-    this._paneName = this.options.paneName || "overlayPane"; // Para leaflet < 1
+    this._paneName = this.options.paneName || "overlayPane"; // for leaflet < 1
 
     var pane = this.map._panes.overlayPane;
     if (this.map.getPane) {
@@ -174,7 +176,7 @@ class DataRenderer {
   }
   onDrawLayer(info) {
     if (!this.data || !this.data.data || this.data.data.length === 0) {
-      console.log(this.data, 'No hay datos disponibles para dibujar');
+      console.log(this.data, 'No available data to draw');
       return;
     }
     if (this._timer) clearTimeout(this._timer);
@@ -191,6 +193,7 @@ class DataRenderer {
         for (let x = 0; x < width; x++) {
           const latLng = this.map.containerPointToLatLng([x, y]);
           const value = this.interpolateValue(latLng.lat, latLng.lng);
+          if (value == null) continue;
           const {
             r,
             g,
@@ -268,7 +271,7 @@ class DataRenderer {
   }
   update(data) {
     this.data = data;
-    if (this.canvasLayer) {
+    if (this.canvasLayer && this.map.hasLayer(this.canvasLayer)) {
       this.canvasLayer.needRedraw();
     }
   }
@@ -577,9 +580,11 @@ function calculateOptimalPointDistance(bounds, maxPoints = 150) {
 }
 
 // get map bounds coordinates with a given adjustment (multiples of MULTIPLE)
-function getMapBoundsCoordinates(map, adjustment = 0) {
+function getMapBoundsCoordinates(map, options) {
   const MULTIPLE = 0.5;
-  const bounds = map.getBounds();
+  const adjustment = options.mapAdjustment ?? 0;
+  var bounds;
+  if (options.maxBounds) bounds = L.latLngBounds(L.latLng(options.maxBounds[0]), L.latLng(options.maxBounds[1]));else bounds = map.getBounds();
   var southWest = bounds.getSouthWest();
   var northEast = bounds.getNorthEast();
 
@@ -767,9 +772,9 @@ function calculateGridParameters(bounds, pointDistance = 0.0625) {
     dy
   };
 }
-function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, demoMode) {
+function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, options) {
   //gridLimits=mapBounds => _northEast y _southWest
-  if (demoMode) {
+  if (options.demoMode) {
     console.log("northWest", gridLimits.getNorthWest());
     L.marker(gridLimits.getNorthWest()).addTo(map);
     console.log("northEast", gridLimits.getNorthEast());
@@ -787,7 +792,7 @@ function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, demoMode) {
     dx,
     dy
   } = calculateGridParameters(gridLimits, pointDistance);
-  if (demoMode) console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
+  if (options.demoMode) console.log("nx:", nx, "ny:", ny, "dx:", dx, "dy:", dy);
 
   // Generar las coordenadas de los puntos
   const points = [];
@@ -809,12 +814,13 @@ function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, demoMode) {
       count1++;
     }
   }
-  if (demoMode) {
+  if (options.demoMode) {
     console.log("Puntos generados:", count);
     console.log("Puntos obviados:", count1 - count);
   }
   return {
     bounds: gridLimits,
+    pointDistance: pointDistance,
     grid: points,
     gridPointsMap: gridPointsMap,
     dx: dx,
@@ -1836,6 +1842,7 @@ class MapManager {
     this.updateTimeout = null;
     this.currentGrid = {
       bounds: null,
+      pointDistance: null,
       grid: [],
       gridPointsMap: null,
       dx: null,
@@ -1858,6 +1865,7 @@ class MapManager {
       maxZoom: options.maxZoom || 18,
       pointDistance: options.pointDistance || null,
       maxGridPoints: options.maxGridPoints || 600,
+      maxBounds: options.maxBounds || null,
       mapAdjustment: options.mapAdjustment || 0,
       windyParameters: {
         ...this.getDefaultWindyParameters(),
@@ -1891,19 +1899,9 @@ class MapManager {
     this.gridsMap = new Map();
 
     // Initialize weather layers
+    this.initializeWindLayer();
     this.initializeTemperatureLayer();
     this.initializePrecipitationLayer();
-    this.initializeWindLayer();
-    if (this.options.demoMode) {
-      const weatherLayers = {
-        "Temperature": this.temperatureRenderer.canvasLayer,
-        "Precipitation": this.precipitationRenderer.canvasLayer,
-        "Wind": this.velocityLayer
-      };
-      L.control.layers(null, weatherLayers, {
-        position: 'topleft'
-      }).addTo(this.map);
-    }
 
     // Initialize event handlers
     this.initializeEventHandlers();
@@ -2065,33 +2063,32 @@ class MapManager {
   }
   initializeEventHandlers() {
     //console.log("######## initializeEventHandlers ########");
-    const map = this.map;
     this.eventHandlers.moveend = this.debounce(() => {
       //console.log("Procesando 'moveend'...");
       if (this.gridsMap.size === 0) return;
-      var mapBounds = map.getBounds();
+      var mapBounds = this.map.getBounds();
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
       if (!isInside) {
         //console.log("Hole map is not in the grid");
-        const dataBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(map, this.options.mapAdjustment);
-        this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options.demoMode);
+        const dataBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
+        this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options);
         this.forceUpdate();
       }
     }, 300);
     this.eventHandlers.zoomend = this.debounce(async () => {
       //console.log("Procesando 'zoomend'...");
       if (this.gridsMap.size === 0) return;
-      const mapBounds = map.getBounds();
+      const mapBounds = this.map.getBounds();
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
-      const dataBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(map, this.options.mapAdjustment);
-      const pointDistance = this.getPointDistanceFromBounds(dataBounds);
-      const pointChanged = pointDistance !== this.options.pointDistance;
+      const dataBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
+      var pointDistance = this.getPointDistanceFromBounds(dataBounds);
+      const pointChanged = pointDistance !== this.currentGrid.pointDistance;
       if (!isInside || pointChanged) {
         //console.log("Hole map is not in the grid");
-        this.options.pointDistance = pointDistance;
-        this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options.demoMode);
+        pointDistance = this.options.pointDistance ?? pointDistance;
+        this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options);
         this.forceUpdate();
       }
     }, 300);
@@ -2115,11 +2112,11 @@ class MapManager {
       var popup = L.popup({
         closeOnClick: true,
         className: 'windelsis-popup' // CSS class
-      }).setLatLng(e.latlng).setContent(`<b>Coordinates:</b><br>` + `Lat: ${lat.toFixed(5)}<br>` + `Lng: ${lng.toFixed(5)}<br>` + `<b>Temperature:</b> ${weatherData.temperature.toFixed(2)}°C<br>` + `<b>Precipitation:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` + `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°<br>` + `<b>Precipitation Probability:</b> ${weatherData.precipitationProb.toFixed(2)}%`).openOn(map);
+      }).setLatLng(e.latlng).setContent(`<b>Coordinates:</b><br>` + `Lat: ${lat.toFixed(5)}<br>` + `Lng: ${lng.toFixed(5)}<br>` + `<b>Temperature:</b> ${weatherData.temperature.toFixed(2)}°C<br>` + `<b>Precipitation:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` + `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°<br>` + `<b>Precipitation Probability:</b> ${weatherData.precipitationProb.toFixed(2)}%`).openOn(this.map);
     }, 300);
-    map.on('moveend', this.eventHandlers.moveend);
-    map.on('zoomend', this.eventHandlers.zoomend);
-    map.on('click', this.eventHandlers.click);
+    this.map.on('moveend', this.eventHandlers.moveend);
+    this.map.on('zoomend', this.eventHandlers.zoomend);
+    this.map.on('click', this.eventHandlers.click);
   }
   pauseHandlers() {
     if (this.handlersPaused) return;
@@ -2223,7 +2220,7 @@ class MapManager {
   forceUpdate() {
     // (to-do) Check if the is new points in this.currentGrid.grid
     this.updateWeatherData().then(() => {
-      console.log(this.currentGrid.grid);
+      //console.log(this.currentGrid);
       this.updateTemperatureData();
       this.updatePrecipitationData();
       this.updateWindData();
@@ -2255,9 +2252,9 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key); //console.log("Exists", this.currentGrid);
     } else {
-      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-      this.options.pointDistance = this.getPointDistanceFromBounds(mapBounds);
-      let auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.options.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options.mapAdjustment), new Map(), this.options.demoMode);
+      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
+      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
+      let auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options), new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = this.gridsMap.get(key);
     }
@@ -2270,9 +2267,9 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key); //console.log("Exists", this.currentGrid);
     } else {
-      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-      this.options.pointDistance = this.getPointDistanceFromBounds(mapBounds);
-      const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.options.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options.mapAdjustment), new Map(), this.options.demoMode);
+      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
+      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
+      const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options), new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = auxGrid;
     }
@@ -2287,9 +2284,9 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);
     } else {
-      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
-      this.options.pointDistance = this.getPointDistanceFromBounds(mapBounds);
-      const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.options.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options.mapAdjustment), new Map(), this.options.demoMode);
+      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
+      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
+      const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options), new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = auxGrid;
     }

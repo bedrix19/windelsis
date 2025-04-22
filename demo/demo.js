@@ -9,6 +9,12 @@ const demoWindyParams = {
   frameRate: 20,
 };
 
+const testOptions = {
+  //maxBounds: [[43.98, -9.41],[42.95, -7.59]], // Need 2 corners
+  //maxGridPoints: 100,
+  //pointDistance: 0.0625, // Will ignore maxGridPoints if set
+}
+
 /**
  * Madrid: 40.4167, -3.7033
  * Coruña: 43.3623, -8.4104
@@ -19,11 +25,12 @@ const demoWindyParams = {
  * Tavira: 37.1318, -7.6430
  */
 let mapManager = new MapManager('map', null, {
+  ...testOptions,
   center: [43.3623, -8.4104],
   zoom: 10,
   randomData: randomDataCheckbox.checked,
   demoMode: demoModeCheckbox,
-  windyParams: demoWindyParams
+  windyParams: demoWindyParams,
 });
 
 const map = mapManager.map;
@@ -68,6 +75,7 @@ document.getElementById('testRecreate').addEventListener('click', async () => {
   let currentZoom = mapManager.map.getZoom();
   mapManager.destroy();
   mapManager = new MapManager(map, null, {
+    ...testOptions,
     center: currentCenter,   
     zoom: currentZoom,
     randomData: randomDataCheckbox.checked,
