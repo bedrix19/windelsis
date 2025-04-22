@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "dist/windelsis.js",
   "scripts": {
-    "build": "NODE_ENV=development webpack --config webpack.config.js",
-    "build:min": "NODE_ENV=production webpack --config webpack.config.js"
+    "build": "cross-env NODE_ENV=development webpack --config webpack.config.js",
+    "build:min": "cross-env NODE_ENV=production webpack --config webpack.config.js"
   },
   "keywords": [
     "weather",
@@ -29,6 +29,7 @@
     "@babel/core": "^7.26.10",
     "@babel/preset-env": "^7.26.9",
     "babel-loader": "^10.0.0",
+    "cross-env": "^7.0.3",
     "css-loader": "^7.1.2",
     "css-minimizer-webpack-plugin": "^7.0.2",
     "mini-css-extract-plugin": "^2.9.2",
