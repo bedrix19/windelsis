@@ -252,36 +252,34 @@ export class MapManager {
   }
 
   initializeEventHandlers() {//console.log("######## initializeEventHandlers ########");
-    const map = this.map;
-
     this.eventHandlers.moveend = this.debounce(() => {//console.log("Procesando 'moveend'...");
       if(this.gridsMap.size === 0) return;
-      var mapBounds = map.getBounds();
+      var mapBounds = this.map.getBounds();
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
 
       if (!isInside) {//console.log("Hole map is not in the grid");
-        const dataBounds = GridUtils.getMapBoundsCoordinates(map, this.options.mapAdjustment);
-        this.currentGrid = GridUtils.gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options.demoMode);
+        const dataBounds = GridUtils.getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
+        this.currentGrid = GridUtils.gridBuilder(this.map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options.demoMode);
         this.forceUpdate();
       }
     }, 300);
 
     this.eventHandlers.zoomend = this.debounce(async () => {//console.log("Procesando 'zoomend'...");
       if(this.gridsMap.size === 0) return;
-      const mapBounds = map.getBounds();
+      const mapBounds = this.map.getBounds();
 
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
 
-      const dataBounds = GridUtils.getMapBoundsCoordinates(map, this.options.mapAdjustment);
+      const dataBounds = GridUtils.getMapBoundsCoordinates(this.map, this.options.mapAdjustment);
 
       const pointDistance = this.getPointDistanceFromBounds(dataBounds);
 
       const pointChanged = pointDistance !== this.options.pointDistance;
       if (!isInside || pointChanged) {//console.log("Hole map is not in the grid");
         this.options.pointDistance = pointDistance;
-        this.currentGrid = GridUtils.gridBuilder(map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options.demoMode);
+        this.currentGrid = GridUtils.gridBuilder(this.map, this.options.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options.demoMode);
         this.forceUpdate();
       }
     }, 300);
@@ -319,12 +317,12 @@ export class MapManager {
         `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°<br>` +
         `<b>Precipitation Probability:</b> ${weatherData.precipitationProb.toFixed(2)}%`
       )
-      .openOn(map); 
+      .openOn(this.map); 
     }, 300);
 
-    map.on('moveend', this.eventHandlers.moveend);
-    map.on('zoomend', this.eventHandlers.zoomend);
-    map.on('click', this.eventHandlers.click);
+    this.map.on('moveend', this.eventHandlers.moveend);
+    this.map.on('zoomend', this.eventHandlers.zoomend);
+    this.map.on('click', this.eventHandlers.click);
   }
 
   pauseHandlers() {
@@ -427,7 +425,7 @@ export class MapManager {
 
   forceUpdate() {
     // (to-do) Check if the is new points in this.currentGrid.grid
-    this.updateWeatherData().then(() => { console.log(this.currentGrid.grid);
+    this.updateWeatherData().then(() => { //console.log(this.currentGrid.grid);
       this.updateTemperatureData();
       this.updatePrecipitationData();
       this.updateWindData();

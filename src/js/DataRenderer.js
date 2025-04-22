@@ -1,5 +1,7 @@
 function getColorForValue(value, colorScale) {
-    // Si el valor está fuera de rango, se retorna el color del extremo correspondiente
+    if (value == null || value == undefined) value = 0; // Default to 0 if no value is provided
+
+    // if value is less than the first value in the scale, return the first color
     if (value <= colorScale[0].value) {
         const [r, g, b] = colorScale[0].color;
         return { r, g, b };
@@ -9,7 +11,7 @@ function getColorForValue(value, colorScale) {
         return { r, g, b };
     }
   
-    // Buscar entre qué dos puntos se encuentra el valor y hacer interpolación
+    // find the two colors that the value is between
     for (let i = 0; i < colorScale.length - 1; i++) {
         const current = colorScale[i];
         const next = colorScale[i + 1];
@@ -66,7 +68,7 @@ class DataRenderer {
     }
 
     init() {
-        this._paneName = this.options.paneName || "overlayPane"; // Para leaflet < 1
+        this._paneName = this.options.paneName || "overlayPane"; // for leaflet < 1
         
         var pane = this.map._panes.overlayPane;
         if (this.map.getPane) {
