@@ -1,6 +1,6 @@
 # Windelsis [![NPM version][npm-image]][npm-url]
 
-`Windelsis` is a JavaScript library for visualizing weather data on interactive maps using Leaflet. It provides tools to render temperature, precipitation, and wind velocity layers, as well as utilities for grid-based weather data management.
+`Windelsis` is a JavaScript library that visualizes weather data on interactive maps using Leaflet. It provides tools to render temperature, precipitation, and wind velocity layers, as well as utilities for grid-based weather data management.
 
 ## Features
 
@@ -13,7 +13,7 @@
 
 ## Installation
 
-To use `Windelsis` in your project, install windelsis or you can build the library and include it in your application.
+To use `Windelsis` in your project, install windelsis, or you can build the library and include it in your application.
 
 ### Build the Library
 
@@ -21,7 +21,7 @@ To use `Windelsis` in your project, install windelsis or you can build the libra
    ```sh
    npm install
 
-2. Build library
+2. Build the library
    ```sh
    npm run build
 
@@ -47,7 +47,7 @@ Can either be:
 1. **A string**: Represents the ID of the HTML element where the Leaflet map will be **created**.
 2. **An instance of `L.Map`**: Pass an existing Leaflet map instance if the map is already created.
 
-This flexibility allows you to either let `Windelsis` handle map creation or integrate it with an existing Leaflet map setup.
+This flexibility allows you to let `Windelsis` handle map creation or integrate it with an existing Leaflet map setup.
 
 ### fetch_function
 
@@ -57,7 +57,7 @@ This function retrieves weather data based on two parameters:
 
 It must return data in the same order as received. If `fetch_function` is `null`, the library defaults to `openMeteoApiCaller` from `apiService.js`, which fetches data from the Open-Meteo API without requiring an API key.
 
-This approach is flexible, allowing you to source weather data from any provider, such as a database or a meteorological API.
+This flexible approach allows you to source weather data from any provider, such as a database or a meteorological API.
 
 ### options
 
@@ -86,9 +86,6 @@ The `options` parameter is an object that configures the behavior of the `MapMan
      - **`lineWidth`** (number): Width of the wind lines.
      - **`particleMultiplier`** (number): Multiplier for the number of particles.
      - **`frameRate`** (number): Frame rate for the animation.
-
-6. **`fetchOptions`** (object, optional):
-   - Additional options to pass to the `fetch_function` for API calls.
 
 ## Get Weather functions
    ```js
