@@ -1,4 +1,4 @@
-# Windelsis
+# Windelsis [![NPM version][npm-image]][npm-url]
 
 `Windelsis` is a JavaScript library for visualizing weather data on interactive maps using Leaflet. It provides tools to render temperature, precipitation, and wind velocity layers, as well as utilities for grid-based weather data management.
 
@@ -114,3 +114,6 @@ Open the `demo` files in your browser. I use the [Live Server](https://marketpla
 ## License
 
 This project is licensed under the MIT License.
+
+[npm-image]: https://img.shields.io/npm/v/windelsis.svg
+[npm-url]: https://www.npmjs.com/package/windelsis
