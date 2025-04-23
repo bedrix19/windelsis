@@ -1937,6 +1937,7 @@ class MapManager {
       ny,
       bounds
     } = this.currentGrid;
+    if (!bounds) return null; // No bounds available
     const latNW = bounds.getNorthWest().lat;
     const lonSW = bounds.getSouthWest().lng;
 

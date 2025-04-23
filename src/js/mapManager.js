@@ -122,6 +122,7 @@ export class MapManager {
   getWeatherDataAt(lat, lng) {
     const { gridPointsMap, dx, dy, nx, ny, bounds } = this.currentGrid;
 
+    if(!bounds) return null; // No bounds available
     const latNW = bounds.getNorthWest().lat;
     const lonSW = bounds.getSouthWest().lng;
 
