@@ -1,6 +1,6 @@
 {
   "name": "windelsis",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "main": "dist/windelsis.js",
   "scripts": {
     "build": "cross-env NODE_ENV=development webpack --config webpack.config.js",
