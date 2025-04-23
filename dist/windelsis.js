@@ -1943,9 +1943,7 @@ class MapManager {
     // Get grid cell indices
     const i = Math.floor((latNW - lat) / dy);
     const j = Math.floor((lng - lonSW) / dx);
-    if (i < 0 || i >= ny - 1 || j < 0 || j >= nx - 1) {
-      throw new Error('Coordinates outside grid bounds');
-    }
+    if (i < 0 || i >= ny - 1 || j < 0 || j >= nx - 1) return null; // Out of bounds
 
     // Calculate corner coordinates and retrieve grid points
     const corners = [{
@@ -2109,10 +2107,16 @@ class MapManager {
         console.log('API data:\n', pointData);
       }
       const weatherData = this.getWeatherDataAt(lat, lng);
+      var popupContent = `<b>Coordinates:</b><br>` + `Lat: ${lat.toFixed(5)}<br>` + `Lng: ${lng.toFixed(5)}<br>`;
+      if (weatherData) {
+        popupContent += `<b>Temperature:</b> ${weatherData.temperature.toFixed(2)}°C<br>` + `<b>Precipitation:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` + `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°<br>` + `<b>Precipitation Probability:</b> ${weatherData.precipitationProb.toFixed(2)}%`;
+      } else {
+        popupContent += `<b>Warning:</b> The selected point is out of the bounds of the current grid.`;
+      }
       var popup = L.popup({
         closeOnClick: true,
         className: 'windelsis-popup' // CSS class
-      }).setLatLng(e.latlng).setContent(`<b>Coordinates:</b><br>` + `Lat: ${lat.toFixed(5)}<br>` + `Lng: ${lng.toFixed(5)}<br>` + `<b>Temperature:</b> ${weatherData.temperature.toFixed(2)}°C<br>` + `<b>Precipitation:</b> ${weatherData.precipitation.toFixed(2)} mm<br>` + `<b>Wind:</b> ${weatherData.wind.speed.toFixed(2)} m/s, ${weatherData.wind.direction.toFixed(0)}°<br>` + `<b>Precipitation Probability:</b> ${weatherData.precipitationProb.toFixed(2)}%`).openOn(this.map);
+      }).setLatLng(e.latlng).setContent(popupContent).openOn(this.map);
     }, 300);
     this.map.on('moveend', this.eventHandlers.moveend);
     this.map.on('zoomend', this.eventHandlers.zoomend);
