@@ -181,7 +181,9 @@ class DataRenderer {
     }
     if (this._timer) clearTimeout(this._timer);
     this._timer = setTimeout(() => {
-      const ctx = info.canvas.getContext('2d');
+      const ctx = info.canvas.getContext('2d', {
+        willReadFrequently: true
+      });
       ctx.clearRect(0, 0, info.canvas.width, info.canvas.height);
       ctx.globalAlpha = this.options.opacity;
       ctx.globalCompositeOperation = 'multiply';
