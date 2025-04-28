@@ -24,8 +24,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   DataRenderer: () => (/* binding */ DataRenderer)
 /* harmony export */ });
 function getColorForValue(value, colorScale) {
-  if (value == null) return null;
-
   // if value is less than the first value in the scale, return the first color
   if (value <= colorScale[0].value) {
     const [r, g, b] = colorScale[0].color;
@@ -60,6 +58,14 @@ function getColorForValue(value, colorScale) {
       };
     }
   }
+
+  // fallback
+  const lastColor = colorScale[colorScale.length - 1].color;
+  return {
+    r: lastColor[0],
+    g: lastColor[1],
+    b: lastColor[2]
+  };
 }
 const COLOR_SCALES = {
   temperature: [{
@@ -195,7 +201,7 @@ class DataRenderer {
         for (let x = 0; x < width; x++) {
           const latLng = this.map.containerPointToLatLng([x, y]);
           const value = this.interpolateValue(latLng.lat, latLng.lng);
-          if (value == null) continue;
+          if (value == null || Number.isNaN(value)) continue;
           const {
             r,
             g,
