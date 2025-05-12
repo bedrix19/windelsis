@@ -29,24 +29,25 @@ export class MapManager {
       moveend: null,
       zoomend: null,
       click: null,
-    },
+    };
     this.handlersPaused = false;
     this.options = {
       randomData: options.randomData ?? true,
-      demoMode: options.demoMode ?? true,
+      demoMode: options.demoMode ?? true, // for debug
       center: options.center || [42.8, -8],
       zoom: options.zoom || 8,
       minZoom: options.minZoom || 3,
       maxZoom: options.maxZoom || 18,
-      pointDistance: options.pointDistance || null,
-      maxGridPoints: options.maxGridPoints || 600,
+      pointDistance: options.pointDistance ?? null,
+      maxGridPoints: options.maxGridPoints ?? 600,
       maxBounds: options.maxBounds || null,
       mapAdjustment: options.mapAdjustment || 0,
       windyParameters: {...this.getDefaultWindyParameters(), ...options.windyParams},
       dateType: options.dateType || 'current',
       start_date: options.start_date || null,
       end_date: options.end_date || null,
-      hour_index: options.hour_index || null
+      hour_index: options.hour_index || null, // to-do: just use daily data and store it
+      layerControlPosition: options.layerControlPosition ?? 'topleft',
     };
     
     this.initialize(mapId);
@@ -108,9 +109,10 @@ export class MapManager {
   }
 
   getPointDistanceFromBounds(bounds) {
-    return GridUtils.calculateOptimalPointDistance(bounds, this.options.maxGridPoints);
+    return GridUtils.calculateOptimalPointDistance(bounds, this.options);
   }
 
+  // Useless
   getPointDistanceFromZoom(zoom) {//console.log("getPointDistanceFromZoom", zoom);
     if (zoom <= 7) return 1;
     else if (zoom > 7 && zoom <= 8) return 0.5;
@@ -189,7 +191,7 @@ export class MapManager {
       'OpenStreetMap': osm,
       'Carto Db Dark': cartoDbDark,
       'cartoDbLight': cartoDbLight,
-    },null,{ position: 'topleft' }).addTo(this.map);
+    },null,{ position: this.options.layerControlPosition }).addTo(this.map);
 
     cartoDbDark.addTo(this.map);
   }
@@ -224,6 +226,7 @@ export class MapManager {
       bounds: null,
       grid: [],
       gridPointsMap: null,
+      pointDistance: null,
       dx: null,
       dy: null, 
       nx: null,
@@ -246,13 +249,14 @@ export class MapManager {
   initializeEventHandlers() {//console.log("######## initializeEventHandlers ########");
     this.eventHandlers.moveend = this.debounce(() => {//console.log("Procesando 'moveend'...");
       if(this.gridsMap.size === 0) return;
-      var mapBounds = this.map.getBounds();
+
+      const mapBounds = this.map.getBounds();
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
 
       if (!isInside) {//console.log("Hole map is not in the grid");
-        const dataBounds = GridUtils.getMapBoundsCoordinates(this.map, this.options);
-        this.currentGrid = GridUtils.gridBuilder(this.map, this.currentGrid.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options);
+        const { bounds } = GridUtils.adjustAndCount(mapBounds, this.currentGrid.pointDistance, this.options.mapAdjustment);
+        this.currentGrid = GridUtils.gridBuilder(this.map, this.currentGrid.pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
         this.forceUpdate();
       }
     }, 300);
@@ -264,14 +268,12 @@ export class MapManager {
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
 
-      const dataBounds = GridUtils.getMapBoundsCoordinates(this.map, this.options);
-
-      var pointDistance = this.getPointDistanceFromBounds(dataBounds);
+      var {pointDistance, bounds} = this.getPointDistanceFromBounds(mapBounds);
 
       const pointChanged = pointDistance !== this.currentGrid.pointDistance;
       if (!isInside || pointChanged) {//console.log("Hole map is not in the grid");
         pointDistance = this.options.pointDistance ?? pointDistance;
-        this.currentGrid = GridUtils.gridBuilder(this.map, pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options);
+        this.currentGrid = GridUtils.gridBuilder(this.map, pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
         this.forceUpdate();
       }
     }, 300);
@@ -317,7 +319,7 @@ export class MapManager {
       .openOn(this.map);
     }, 300);
 
-    this.map.on('moveend', this.eventHandlers.moveend);
+    this.map.on('moveend', this.eventHandlers.moveend); // same handler cuz of calculateOptimalPointDistance implementation
     this.map.on('zoomend', this.eventHandlers.zoomend);
     this.map.on('click', this.eventHandlers.click);
   }
@@ -335,6 +337,7 @@ export class MapManager {
     this.map.on('moveend', this.eventHandlers.moveend);
     this.map.on('zoomend', this.eventHandlers.zoomend);
     this.handlersPaused = false;
+    this.eventHandlers.zoomend();
     console.log('Handlers resumed');
   }
 
@@ -457,12 +460,11 @@ export class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);//console.log("Exists", this.currentGrid);
     } else {
-      const mapBounds = GridUtils.getMapBoundsCoordinates(this.map, this.options);
-      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
+      var { pointDistance, bounds } = this.getPointDistanceFromBounds(this.map.getBounds());
       let auxGrid = GridUtils.gridBuilder(
         this.map,
-        this.currentGrid.pointDistance,
-        GridUtils.getMapBoundsCoordinates(this.map, this.options),
+        pointDistance,
+        bounds,
         new Map(),
         this.options
       );
@@ -478,12 +480,11 @@ export class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);//console.log("Exists", this.currentGrid);
     } else {
-      const mapBounds = GridUtils.getMapBoundsCoordinates(this.map, this.options);
-      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
+      var { pointDistance, bounds } = this.getPointDistanceFromBounds(this.map.getBounds());
       const auxGrid = GridUtils.gridBuilder(
         this.map,
-        this.currentGrid.pointDistance,
-        GridUtils.getMapBoundsCoordinates(this.map, this.options),
+        pointDistance,
+        bounds,
         new Map(),
         this.options
       );
@@ -503,12 +504,11 @@ export class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);
     } else {
-      const mapBounds = GridUtils.getMapBoundsCoordinates(this.map, this.options);
-      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
+      var { pointDistance, bounds } = this.getPointDistanceFromBounds(this.map.getBounds());
       const auxGrid = GridUtils.gridBuilder(
         this.map,
-        this.currentGrid.pointDistance,
-        GridUtils.getMapBoundsCoordinates(this.map, this.options),
+        pointDistance,
+        bounds,
         new Map(),
         this.options
       );

@@ -1,0 +1,124 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    overflow: hidden;
+}
+
+body {
+    /* Quitamos estilos de flex para no centrar contenido vertical/horizontalmente */
+    display: block;
+}
+
+#map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    background-color: #333;
+    z-index: 0;
+}
+
+#mapControls {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    z-index: 1000;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 15px;
+    background-color: rgba(51, 51, 51, 0.8);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+#heading {
+    text-align: center;
+    padding: 20px;
+    background: #333;
+    color: #CCC;
+}
+
+.leaflet-canvas-layer {
+    opacity: 0.55;
+}
+
+.button-style {
+    padding: 8px 15px;
+    background-color: #3388ff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.button-style:hover {
+    background-color: #2a6fcc;
+}
+
+.input-style {
+    padding: 6px 10px;
+    background-color: #444444;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    color: #ffffff;
+    max-width: 150px;
+    box-sizing: border-box;
+}
+
+label {
+    color: #ffffff;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    max-width: 100%;
+}
+
+.label-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.label-group label {
+    margin: 0;
+}
+
+.leaflet-container {
+    color: #333 !important;
+}
+
+.leaflet-control-layers,
+.leaflet-control-zoom {
+    color: #333;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.leaflet-control-layers label {
+    color: #333;
+    margin: 0;
+}
+
+.separator {
+    border: none;
+    height: 1px;
+    background-color: #ffffff;
+    margin: 10px 0;
+    width: 100%;
+}

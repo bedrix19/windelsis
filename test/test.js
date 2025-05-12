@@ -1,7 +1,6 @@
 const { MapManager } = window.Windelsis;
 
 const randomDataCheckbox = document.getElementById('randomData');
-const demoModeCheckbox = false;
 
 const demoWindyParams = {
   lineWidth: 2.5,
@@ -12,15 +11,24 @@ const demoWindyParams = {
 const testOptions = {
   //maxBounds: [[43.98, -9.41],[42.95, -7.59]], // Need 2 corners
   //maxGridPoints: 100,
-  //pointDistance: 0.0625, // Will ignore maxGridPoints if set
+  pointDistance: 1, // Will ignore maxGridPoints if set
+  demoMode: true,
 }
 
+/**
+ * Madrid: 40.4167, -3.7033
+ * Coruña: 43.3623, -8.4104
+ * Vigo: 42.2406, -8.7207
+ * SdC: 42.8769, -8.5442
+ * Pamplona: 42.8169, -1.6458
+ * Lisboa: 38.7223, -9.1393
+ * Tavira: 37.1318, -7.6430
+ */
 let mapManager = new MapManager('map', null, {
   ...testOptions,
   center: [43.3623, -8.4104],
   zoom: 10,
   randomData: randomDataCheckbox.checked,
-  demoMode: demoModeCheckbox,
   windyParams: demoWindyParams,
 });
 
@@ -70,7 +78,6 @@ document.getElementById('testRecreate').addEventListener('click', async () => {
     center: currentCenter,   
     zoom: currentZoom,
     randomData: randomDataCheckbox.checked,
-    demoMode: demoModeCheckbox,
     windyParams: demoWindyParams
   });
 });
@@ -92,4 +99,16 @@ document.getElementById('toggleUpdates').addEventListener('click', () => {
   const button = document.getElementById('toggleUpdates');
   const isPaused = mapManager.toggleUpdates();
   button.textContent = isPaused ? 'Resume Updates' : 'Pause Updates';
+});
+
+document.getElementById('changeGridOptions').addEventListener('click', () => {
+  console.log('Changing area options');
+  const lat0 = parseFloat(document.getElementById('minLat').value);
+  const lat1 = parseFloat(document.getElementById('maxLat').value);
+  const lng0 = parseFloat(document.getElementById('minLon').value);
+  const lng1 = parseFloat(document.getElementById('maxLon').value);
+  mapManager.options.maxBounds = [
+    [lat0, lng0],
+    [lat1, lng1]
+  ];
 });

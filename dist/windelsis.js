@@ -509,18 +509,18 @@ __webpack_require__.r(__webpack_exports__);
 
 function generateRandomGridData(points) {
   //console.log("Generating random grid data...");
-  const baseTemperature = Math.random() * 20 + 5; // Temperatura entre 5º y 25º
-  const baseWindSpeed = Math.random() * 10 + 5; // Velocidad del viento entre 5 y 15 m/s
-  const baseWindDirection = Math.random() * 360; // Dirección del viento entre 0 y 360 grados
-  const basePrecipitation = Math.random() * 5; // Precipitación base entre 0 y 5 mm
+  const baseTemperature = Math.random() * 20 + 5; // temperature between 5º y 25º
+  const baseWindSpeed = Math.random() * 10 + 5; // wind speed between 5 and 15 m/s
+  const baseWindDirection = Math.random() * 360; // wind direction between 0 and 360 degrees
+  const basePrecipitation = Math.random() * 5; // precipitation between 0 and 5 mm
 
   // Check if points is a Map and convert to array if necessary
   const pointsArray = points instanceof Map ? Array.from(points.values()) : points;
   pointsArray.forEach(point => {
-    const randomTemperature = (baseTemperature + (Math.random() * 10 - 5)).toFixed(2); // Varianza de ±5
-    const randomWindSpeed = (baseWindSpeed + (Math.random() * 5 - 2.5)).toFixed(2); // Varianza de ±2.5
-    const randomWindDirection = (baseWindDirection + (Math.random() * 180 - 45)).toFixed(2); // Varianza de ±45
-    const randomPrecipitation = (basePrecipitation + (Math.random() * 2 - 1)).toFixed(2); // Varianza de ±1
+    const randomTemperature = (baseTemperature + (Math.random() * 10 - 5)).toFixed(2); // variance of ±5
+    const randomWindSpeed = (baseWindSpeed + (Math.random() * 5 - 2.5)).toFixed(2); // variance of ±2.5
+    const randomWindDirection = (baseWindDirection + (Math.random() * 180 - 45)).toFixed(2); // variance of ±45
+    const randomPrecipitation = (basePrecipitation + (Math.random() * 2 - 1)).toFixed(2); // variance of ±1
 
     const weatherData = {
       weather_units: {
@@ -565,45 +565,87 @@ function getBoundsAtZoom(map, zoomLevel) {
 
   return L.latLngBounds(southWest, northEast);
 }
-function calculateOptimalPointDistance(bounds, maxPoints = 150) {
-  const possibleDistances = [0.0625, 0.125, 0.25, 0.5, 1];
-  const lonRange = Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
-  const latRange = Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat);
-
-  // Calculate points needed for each distance
-  for (const distance of possibleDistances) {
-    const nx = Math.ceil(lonRange / distance) + 1;
-    const ny = Math.ceil(latRange / distance) + 1;
-    const totalPoints = nx * ny;
-    if (totalPoints <= maxPoints) {
-      console.log(`Selected point distance: ${distance}° (${nx}x${ny}=${totalPoints} points)`);
-      return distance;
-    }
-    console.log(`Distance ${distance}° would exceed maxPoints (${totalPoints} > ${maxPoints})`);
-  }
-
-  // If all distances would exceed maxPoints, return the largest distance
-  console.log(`Using maximum distance: 1° due to area size`);
-  return possibleDistances[possibleDistances.length - 1];
+function adjustAndCount(rawBounds, distance, mapAdjustment = 0) {
+  const mult = distance > 0.5 ? distance : 0.5;
+  const {
+    lat: swLat0,
+    lng: swLng0
+  } = rawBounds.getSouthWest();
+  const {
+    lat: neLat0,
+    lng: neLng0
+  } = rawBounds.getNorthEast();
+  const roundTo = (v, up) => up ? Math.ceil(v / mult) * mult : Math.floor(v / mult) * mult;
+  const swLat = roundTo(swLat0, false) - mapAdjustment;
+  const swLng = roundTo(swLng0, false) - mapAdjustment;
+  const neLat = roundTo(neLat0, true) + mapAdjustment;
+  const neLng = roundTo(neLng0, true) + mapAdjustment;
+  const bounds = L.latLngBounds(L.latLng(swLat, swLng), L.latLng(neLat, neLng));
+  const lonRange = bounds.getEast() - bounds.getWest();
+  const latRange = bounds.getNorth() - bounds.getSouth();
+  const cols = Math.round(lonRange / distance) + 1;
+  const rows = Math.round(latRange / distance) + 1;
+  const total = cols * rows;
+  return {
+    bounds,
+    cols,
+    rows,
+    total
+  };
 }
-
-// get map bounds coordinates with a given adjustment (multiples of MULTIPLE)
-function getMapBoundsCoordinates(map, options) {
-  const MULTIPLE = 0.5;
-  const adjustment = options.mapAdjustment ?? 0;
-  var bounds;
-  if (options.maxBounds) bounds = L.latLngBounds(L.latLng(options.maxBounds[0]), L.latLng(options.maxBounds[1]));else bounds = map.getBounds();
-  var southWest = bounds.getSouthWest();
-  var northEast = bounds.getNorthEast();
-
-  //console.log("Map Bounds\nNW:", L.latLng(northEast.lat, southWest.lng), " NE:", northEast," SW:", southWest, " SE:", L.latLng(southWest.lat, northEast.lng));
-
-  function roundToMultiple(value, multiple, roundUp) {
-    return roundUp ? Math.ceil(value / multiple) * multiple : Math.floor(value / multiple) * multiple;
+function calculateOptimalPointDistance(rawBounds, options) {
+  const candidates = [0.0625, 0.125, 0.25, 0.5, 1];
+  const maxPts = options.maxGridPoints;
+  const adj = options.mapAdjustment ?? 0;
+  if (options.pointDistance != null) {
+    const {
+      bounds,
+      cols,
+      rows,
+      total
+    } = adjustAndCount(rawBounds, options.pointDistance, adj);
+    if (options.demoMode) console.log(`Selected point distance: ${options.pointDistance}° (${rows}x${cols}=${total} points)`);
+    return {
+      pointDistance: options.pointDistance,
+      bounds,
+      ny: cols,
+      nx: rows
+    };
   }
-  southWest = L.latLng(roundToMultiple(southWest.lat, MULTIPLE, false) - adjustment, roundToMultiple(southWest.lng, MULTIPLE, false) - adjustment);
-  northEast = L.latLng(roundToMultiple(northEast.lat, MULTIPLE, true) + adjustment, roundToMultiple(northEast.lng, MULTIPLE, true) + adjustment);
-  return L.latLngBounds(southWest, northEast);
+  for (const d of candidates) {
+    const {
+      bounds,
+      cols,
+      rows,
+      total
+    } = adjustAndCount(rawBounds, d, adj);
+    if (total <= maxPts) {
+      if (options.demoMode) console.log(`Selected point distance: ${d}° (${rows}x${cols}=${total} points)`);
+      return {
+        pointDistance: d,
+        bounds,
+        ny: cols,
+        nx: rows
+      };
+    }
+    if (options.demoMode) console.log(`Distance: ${d}° would exceed maxPoints (${total}>${maxPts})`);
+  }
+
+  // Fallback
+  const last = candidates[candidates.length - 1];
+  const {
+    bounds,
+    cols,
+    rows,
+    total
+  } = adjustAndCount(rawBounds, last, adj);
+  if (options.demoMode) console.log(`Fallback point distance: ${last}° (${rows}x${cols}=${total} points)`);
+  return {
+    pointDistance: last,
+    bounds,
+    ny: cols,
+    nx: rows
+  };
 }
 function weatherDataBuilder(grid, dataType = 'temperature') {
   const {
@@ -734,18 +776,9 @@ function windyDataBuilder(Grid, options) {
   //console.log(windData); //console.log("windData", JSON.stringify(windData, null, 2));
   return windData;
 }
-
-/**
- * Generate a unique key for each point based on latitude and longitude.
- * the key is in the format "latitude_longitude" with 4 decimal places.
- */
 function generatePointKey(latitude, longitude, decimals = 4) {
   return `${latitude.toFixed(decimals)}_${longitude.toFixed(decimals)}`;
 }
-
-/**
- * Build a lookup map for GridPoint objects using their latitude and longitude.
- */
 function buildPointsLookup(points) {
   const lookup = new Map();
   points.forEach(point => {
@@ -755,7 +788,7 @@ function buildPointsLookup(points) {
   return lookup;
 }
 
-// Calcular nx, ny, dx y dy
+// calculate nx, ny, dx y dy
 function calculateGridParameters(bounds, pointDistance = 0.0625) {
   const lonRange = Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
   const latRange = Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat);
@@ -783,6 +816,11 @@ function calculateGridParameters(bounds, pointDistance = 0.0625) {
 function gridBuilder(map, pointDistance, gridLimits, gridPointsMap, options) {
   //gridLimits=mapBounds => _northEast y _southWest
   if (options.demoMode) {
+    map.eachLayer(function (layer) {
+      if (layer instanceof L.Marker) {
+        map.removeLayer(layer);
+      }
+    });
     console.log("northWest", gridLimits.getNorthWest());
     L.marker(gridLimits.getNorthWest()).addTo(map);
     console.log("northEast", gridLimits.getNorthEast());
@@ -845,7 +883,6 @@ function updateWindyParameters(velocityLayer = null, windyParameters) {
   convertWindDirection,
   getBoundsAtZoom,
   calculateOptimalPointDistance,
-  getMapBoundsCoordinates,
   weatherDataBuilder,
   tempDataBuilder,
   precipDataBuilder,
@@ -854,7 +891,8 @@ function updateWindyParameters(velocityLayer = null, windyParameters) {
   buildPointsLookup,
   calculateGridParameters,
   gridBuilder,
-  updateWindyParameters
+  updateWindyParameters,
+  adjustAndCount
 });
 
 /***/ })
@@ -1863,16 +1901,18 @@ class MapManager {
       moveend: null,
       zoomend: null,
       click: null
-    }, this.handlersPaused = false;
+    };
+    this.handlersPaused = false;
     this.options = {
       randomData: options.randomData ?? true,
       demoMode: options.demoMode ?? true,
+      // for debug
       center: options.center || [42.8, -8],
       zoom: options.zoom || 8,
       minZoom: options.minZoom || 3,
       maxZoom: options.maxZoom || 18,
-      pointDistance: options.pointDistance || null,
-      maxGridPoints: options.maxGridPoints || 600,
+      pointDistance: options.pointDistance ?? null,
+      maxGridPoints: options.maxGridPoints ?? 600,
       maxBounds: options.maxBounds || null,
       mapAdjustment: options.mapAdjustment || 0,
       windyParameters: {
@@ -1882,7 +1922,9 @@ class MapManager {
       dateType: options.dateType || 'current',
       start_date: options.start_date || null,
       end_date: options.end_date || null,
-      hour_index: options.hour_index || null
+      hour_index: options.hour_index || null,
+      // to-do: just use daily data and store it
+      layerControlPosition: options.layerControlPosition ?? 'topleft'
     };
     this.initialize(mapId);
   }
@@ -1930,8 +1972,10 @@ class MapManager {
     };
   }
   getPointDistanceFromBounds(bounds) {
-    return _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].calculateOptimalPointDistance(bounds, this.options.maxGridPoints);
+    return _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].calculateOptimalPointDistance(bounds, this.options);
   }
+
+  // Useless
   getPointDistanceFromZoom(zoom) {
     //console.log("getPointDistanceFromZoom", zoom);
     if (zoom <= 7) return 1;else if (zoom > 7 && zoom <= 8) return 0.5;else if (zoom > 8 && zoom <= 9) return 0.25;else if (zoom > 9 && zoom < 11) return 0.125;else return 0.0625;
@@ -2018,7 +2062,7 @@ class MapManager {
       'Carto Db Dark': cartoDbDark,
       'cartoDbLight': cartoDbLight
     }, null, {
-      position: 'topleft'
+      position: this.options.layerControlPosition
     }).addTo(this.map);
     cartoDbDark.addTo(this.map);
   }
@@ -2052,6 +2096,7 @@ class MapManager {
       bounds: null,
       grid: [],
       gridPointsMap: null,
+      pointDistance: null,
       dx: null,
       dy: null,
       nx: null,
@@ -2073,13 +2118,15 @@ class MapManager {
     this.eventHandlers.moveend = this.debounce(() => {
       //console.log("Procesando 'moveend'...");
       if (this.gridsMap.size === 0) return;
-      var mapBounds = this.map.getBounds();
+      const mapBounds = this.map.getBounds();
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
       if (!isInside) {
         //console.log("Hole map is not in the grid");
-        const dataBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
-        this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options);
+        const {
+          bounds
+        } = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].adjustAndCount(mapBounds, this.currentGrid.pointDistance, this.options.mapAdjustment);
+        this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
         this.forceUpdate();
       }
     }, 300);
@@ -2089,13 +2136,15 @@ class MapManager {
       const mapBounds = this.map.getBounds();
       const gridBounds = this.currentGrid.bounds;
       const isInside = gridBounds.contains(mapBounds.getNorthEast()) && gridBounds.contains(mapBounds.getSouthWest());
-      const dataBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
-      var pointDistance = this.getPointDistanceFromBounds(dataBounds);
+      var {
+        pointDistance,
+        bounds
+      } = this.getPointDistanceFromBounds(mapBounds);
       const pointChanged = pointDistance !== this.currentGrid.pointDistance;
       if (!isInside || pointChanged) {
         //console.log("Hole map is not in the grid");
         pointDistance = this.options.pointDistance ?? pointDistance;
-        this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, dataBounds, this.currentGrid.gridPointsMap, this.options);
+        this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
         this.forceUpdate();
       }
     }, 300);
@@ -2127,7 +2176,7 @@ class MapManager {
         className: 'windelsis-popup' // CSS class
       }).setLatLng(e.latlng).setContent(popupContent).openOn(this.map);
     }, 300);
-    this.map.on('moveend', this.eventHandlers.moveend);
+    this.map.on('moveend', this.eventHandlers.moveend); // same handler cuz of calculateOptimalPointDistance implementation
     this.map.on('zoomend', this.eventHandlers.zoomend);
     this.map.on('click', this.eventHandlers.click);
   }
@@ -2143,6 +2192,7 @@ class MapManager {
     this.map.on('moveend', this.eventHandlers.moveend);
     this.map.on('zoomend', this.eventHandlers.zoomend);
     this.handlersPaused = false;
+    this.eventHandlers.zoomend();
     console.log('Handlers resumed');
   }
   toggleUpdates() {
@@ -2265,9 +2315,11 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key); //console.log("Exists", this.currentGrid);
     } else {
-      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
-      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
-      let auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options), new Map(), this.options);
+      var {
+        pointDistance,
+        bounds
+      } = this.getPointDistanceFromBounds(this.map.getBounds());
+      let auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, bounds, new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = this.gridsMap.get(key);
     }
@@ -2280,9 +2332,11 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key); //console.log("Exists", this.currentGrid);
     } else {
-      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
-      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
-      const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options), new Map(), this.options);
+      var {
+        pointDistance,
+        bounds
+      } = this.getPointDistanceFromBounds(this.map.getBounds());
+      const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, bounds, new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = auxGrid;
     }
@@ -2297,9 +2351,11 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);
     } else {
-      const mapBounds = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options);
-      this.currentGrid.pointDistance = this.options.pointDistance ?? this.getPointDistanceFromBounds(mapBounds);
-      const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].getMapBoundsCoordinates(this.map, this.options), new Map(), this.options);
+      var {
+        pointDistance,
+        bounds
+      } = this.getPointDistanceFromBounds(this.map.getBounds());
+      const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, bounds, new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = auxGrid;
     }
