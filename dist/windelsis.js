@@ -1913,7 +1913,7 @@ class MapManager {
       maxZoom: options.maxZoom || 18,
       pointDistance: options.pointDistance ?? null,
       maxGridPoints: options.maxGridPoints ?? 600,
-      maxBounds: options.maxBounds || null,
+      maxBounds: options.maxBounds ? L.latLngBounds([options.maxBounds[0], options.maxBounds[1]]) : null,
       mapAdjustment: options.mapAdjustment || 0,
       windyParameters: {
         ...this.getDefaultWindyParameters(),
@@ -2125,7 +2125,7 @@ class MapManager {
         //console.log("Hole map is not in the grid");
         const {
           bounds
-        } = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].adjustAndCount(mapBounds, this.currentGrid.pointDistance, this.options.mapAdjustment);
+        } = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].adjustAndCount(this.options.maxBounds ?? mapBounds, this.currentGrid.pointDistance, this.options.mapAdjustment);
         this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.currentGrid.pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
         this.forceUpdate();
       }
@@ -2139,7 +2139,7 @@ class MapManager {
       var {
         pointDistance,
         bounds
-      } = this.getPointDistanceFromBounds(mapBounds);
+      } = this.getPointDistanceFromBounds(this.options.maxBounds ?? mapBounds);
       const pointChanged = pointDistance !== this.currentGrid.pointDistance;
       if (!isInside || pointChanged) {
         //console.log("Hole map is not in the grid");
@@ -2315,10 +2315,11 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key); //console.log("Exists", this.currentGrid);
     } else {
+      const mapBounds = this.options.maxBounds ?? this.map.getBounds();
       var {
         pointDistance,
         bounds
-      } = this.getPointDistanceFromBounds(this.map.getBounds());
+      } = this.getPointDistanceFromBounds(mapBounds);
       let auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, bounds, new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = this.gridsMap.get(key);
@@ -2332,10 +2333,11 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key); //console.log("Exists", this.currentGrid);
     } else {
+      const mapBounds = this.options.maxBounds ?? this.map.getBounds();
       var {
         pointDistance,
         bounds
-      } = this.getPointDistanceFromBounds(this.map.getBounds());
+      } = this.getPointDistanceFromBounds(mapBounds);
       const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, bounds, new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = auxGrid;
@@ -2351,10 +2353,11 @@ class MapManager {
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);
     } else {
+      const mapBounds = this.options.maxBounds ?? this.map.getBounds();
       var {
         pointDistance,
         bounds
-      } = this.getPointDistanceFromBounds(this.map.getBounds());
+      } = this.getPointDistanceFromBounds(mapBounds);
       const auxGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, pointDistance, bounds, new Map(), this.options);
       this.gridsMap.set(key, auxGrid);
       this.currentGrid = auxGrid;
