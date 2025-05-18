@@ -2310,6 +2310,32 @@ class MapManager {
     //console.log("######## updateWindData ########");
     this.velocityLayer.setData(_gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].windyDataBuilder(this.currentGrid, this.options));
   }
+  updateConfig(newConfig = {}) {
+    Object.assign(this.options, {
+      pointDistance: newConfig.pointDistance ?? this.options.pointDistance,
+      maxGridPoints: newConfig.maxGridPoints ?? this.options.maxGridPoints,
+      maxBounds: newConfig.maxBounds ? L.latLngBounds([newConfig.maxBounds[0], newConfig.maxBounds[1]]) : this.options.maxBounds,
+      windyParameters: newConfig.windyParameters ? {
+        ...this.options.windyParameters,
+        ...newConfig.windyParameters
+      } : this.options.windyParameters
+    });
+    if (newConfig.windyParameters) {
+      this.velocityLayer.setOptions(this.options.windyParameters);
+      if (this.map.hasLayer(this.velocityLayer)) {
+        this.velocityLayer.remove();
+        this.velocityLayer.addTo(this.map);
+      }
+    }
+    if (newConfig.pointDistance || newConfig.maxBounds || newConfig.maxGridPoints) {
+      var {
+        pointDistance,
+        bounds
+      } = this.getPointDistanceFromBounds(this.options.maxBounds ?? this.map.getBounds());
+      this.currentGrid = _gridUtils_js__WEBPACK_IMPORTED_MODULE_1__["default"].gridBuilder(this.map, this.options.pointDistance ?? pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
+      this.forceUpdate();
+    }
+  }
   getCurrentData() {
     const key = 'current';
     if (this.gridsMap.has(key)) {

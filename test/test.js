@@ -112,3 +112,44 @@ document.getElementById('changeGridOptions').addEventListener('click', () => {
     [lat1, lng1]
   ];
 });
+
+document.getElementById('applyConfig').addEventListener('click', () => {
+  const pd = parseFloat(document.getElementById('pointDistance').value);
+  const mg = parseInt(document.getElementById('maxGridPoints').value, 10);
+  const lat1 = parseFloat(document.getElementById('boundsLat1').value);
+  const lng1 = parseFloat(document.getElementById('boundsLng1').value);
+  const lat2 = parseFloat(document.getElementById('boundsLat2').value);
+  const lng2 = parseFloat(document.getElementById('boundsLng2').value);
+
+  const config = {};
+  if (!isNaN(pd)) config.pointDistance = pd;
+  if (!isNaN(mg)) config.maxGridPoints = mg;
+  if (![lat1, lng1, lat2, lng2].some(isNaN)) {
+    config.maxBounds = [[lat1, lng1], [lat2, lng2]];
+  }
+
+  // Aplicar nueva configuración
+  mapManager.updateConfig(config);
+});
+
+/**************************
+ * Toggle show/hide controls
+ *************************/
+document.getElementById('toggleButton').addEventListener('click', function() {
+  const mapControls = document.getElementById('mapControls');
+  if (mapControls.style.display === 'none' || mapControls.style.display === '') {
+    mapControls.style.display = 'flex'; // Show the controls
+  } else {
+    mapControls.style.display = 'none'; // Hide the controls
+  }
+});
+function positionToggleButton() {
+    const toggleButton = document.getElementById('toggleButton');
+    const leafletControl = document.querySelector('.leaflet-control-layers');
+    if (leafletControl) {
+        const rect = leafletControl.getBoundingClientRect();
+        toggleButton.style.top = `${rect.bottom + window.scrollY + 10}px`; // 10px below the control
+        toggleButton.style.left = `${rect.left}px`; // Align with the left of the control
+    }
+}
+positionToggleButton();
