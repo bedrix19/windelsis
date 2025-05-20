@@ -130,6 +130,11 @@ document.getElementById('applyConfig').addEventListener('click', () => {
 
   // Aplicar nueva configuración
   mapManager.updateConfig(config);
+  map.removeLayer(mapManager.velocityLayer);
+  map.removeLayer(mapManager.temperatureRenderer.canvasLayer);
+  map.removeLayer(mapManager.precipitationRenderer.canvasLayer);
+  map.fitBounds(L.latLngBounds([lat1, lng1], [lat2, lng2]));
+  map.fire('zoomend');
 });
 
 /**************************

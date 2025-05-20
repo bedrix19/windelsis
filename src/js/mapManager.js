@@ -3,6 +3,8 @@ import GridUtils from './gridUtils.js';
 import { GridPoint } from "./gridPoint.js";
 import { openMeteoApiCaller } from './apiService.js';
 
+import HeatmapTileLayer from "./HeatmapTileLayer.js";
+
 export class MapManager {
   constructor(mapId, apiCaller, options = {}) {
     this.apiCaller = apiCaller ?? openMeteoApiCaller;
@@ -81,7 +83,7 @@ export class MapManager {
     this.initializeEventHandlers();
 
     // Initialize event listeners for layer control
-    this.addLayerControlListeners();
+    //this.addLayerControlListeners();
   }
 
   getDefaultWindyParameters() {
@@ -385,16 +387,16 @@ export class MapManager {
   }
 
   initializeTemperatureLayer() {//console.log("######## initializeTemperatureLayer ########");
-    this.temperatureRenderer = new DataRenderer(this.map, [], {
-      pixelSize: 5,
-      opacity: 0.3,
-      controlName: 'Temperature Layer',
+    this.temperatureLayer = new HeatmapTileLayer(this.data, {
+      tileSize: 256,
+      opacity: 0.65,
       colorScale: COLOR_SCALES.temperature,
-      layerControl: this.layerControl,
-      demoMode: this.options.demoMode
-    });
-  
-    this.temperatureRenderer.canvasLayer = this.temperatureRenderer.init();
+      // Opciones de Leaflet.GridLayer
+      updateWhenZooming: false,
+      keepBuffer: 1
+    }).addTo(this.map);
+    this.layerControl.addOverlay(this.temperatureLayer, 'Temperature Layer');
+    this.temperatureLayer.addTo(this.map);
   }
 
   initializePrecipitationLayer() {//console.log("######## initializePrecipitationLayer ########");
@@ -443,14 +445,15 @@ export class MapManager {
   }
 
   updateTemperatureData() {//console.log("######## updateTemperatureData ########");
-    this.temperatureRenderer.update(GridUtils.tempDataBuilder(this.currentGrid));
+    this.temperatureLayer.updateData(GridUtils.tempDataBuilder(this.currentGrid));
+    //this.temperatureRenderer.update(GridUtils.tempDataBuilder(this.currentGrid));
   }
 
   updatePrecipitationData() {//console.log("######## updatePrecipitationData ########");
     this.precipitationRenderer.update(GridUtils.precipDataBuilder(this.currentGrid));
   }
 
-  updateWindData() {//console.log("######## updateWindData ########");
+  updateWindData() {console.log("######## updateWindData ########");
     this.velocityLayer.setData(GridUtils.windyDataBuilder(this.currentGrid, this.options));
   }
 
@@ -465,7 +468,7 @@ export class MapManager {
         ? { ...this.options.windyParameters, ...newConfig.windyParameters }
         : this.options.windyParameters
     });
-
+    /* better if handled in the main
     if (newConfig.windyParameters) {
       this.velocityLayer.setOptions(this.options.windyParameters);
       if (this.map.hasLayer(this.velocityLayer)) {
@@ -479,6 +482,7 @@ export class MapManager {
       this.currentGrid = GridUtils.gridBuilder(this.map, this.options.pointDistance ?? pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
       this.forceUpdate();
     }
+      */
   }
 
   getCurrentData() {
