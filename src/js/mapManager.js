@@ -34,8 +34,8 @@ export class MapManager {
     };
     this.handlersPaused = false;
     this.options = {
-      randomData: options.randomData ?? true,
-      demoMode: options.demoMode ?? true, // for debug
+      randomData: options.randomData ?? false,
+      demoMode: options.demoMode ?? false, // for debug
       center: options.center || [42.8, -8],
       zoom: options.zoom || 8,
       minZoom: options.minZoom || 3,

@@ -9,10 +9,10 @@ const demoWindyParams = {
 };
 
 const testOptions = {
-  maxBounds: [[43.98, -9.41],[42.95, -7.59]], // Need 2 corners
+  maxBounds: [[43.5724, -9.3823],[37.3701, 0.5383]], // Need 2 corners
   //maxGridPoints: 100,
   //pointDistance: 1, // Will ignore maxGridPoints if set
-  demoMode: true,
+  //demoMode: true,
 }
 
 /**

@@ -2124,8 +2124,8 @@ class MapManager {
     };
     this.handlersPaused = false;
     this.options = {
-      randomData: options.randomData ?? true,
-      demoMode: options.demoMode ?? true,
+      randomData: options.randomData ?? false,
+      demoMode: options.demoMode ?? false,
       // for debug
       center: options.center || [42.8, -8],
       zoom: options.zoom || 8,
@@ -2550,7 +2550,7 @@ class MapManager {
         this.velocityLayer.addTo(this.map);
       }
     }
-      if (newConfig.pointDistance || newConfig.maxBounds || newConfig.maxGridPoints) {
+     if (newConfig.pointDistance || newConfig.maxBounds || newConfig.maxGridPoints) {
       var {pointDistance, bounds} = this.getPointDistanceFromBounds(this.options.maxBounds ?? this.map.getBounds());
       this.currentGrid = GridUtils.gridBuilder(this.map, this.options.pointDistance ?? pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
       this.forceUpdate();
