@@ -48,6 +48,8 @@ export class MapManager {
       end_date: options.end_date || null,
       hour_index: options.hour_index || null, // to-do: just use daily data and store it
       layerControlPosition: options.layerControlPosition ?? 'topleft',
+      temp_color_scale: options.temp_color_scale ?? COLOR_SCALES.temperature,
+      prec_color_scale: options.prec_color_scale ?? COLOR_SCALES.precipitation,
     };
     
     this.initialize(mapId);
@@ -66,7 +68,8 @@ export class MapManager {
     }
 
     // Add base layers
-    this.setupBaseLayers();
+    if(this.options.demoMode) this.setupBaseLayers();
+    else this.layerControl = L.control.layers({},null,{ position: this.options.layerControlPosition }).addTo(this.map);
     
     // Setup grid points
     this.currentGrid.gridPointsMap = new Map();
@@ -389,7 +392,7 @@ export class MapManager {
       pixelSize: 5,
       opacity: 0.3,
       controlName: 'Temperature Layer',
-      colorScale: COLOR_SCALES.temperature,
+      colorScale: this.options.temp_color_scale,
       layerControl: this.layerControl,
       demoMode: this.options.demoMode
     });
@@ -402,7 +405,7 @@ export class MapManager {
       pixelSize: 5,
       opacity: 0.3,
       controlName: 'Precipitation Layer',
-      colorScale: COLOR_SCALES.precipitation,
+      colorScale: this.options.prec_color_scale,
       layerControl: this.layerControl,
       demoMode: this.options.demoMode
     });
@@ -474,6 +477,28 @@ export class MapManager {
       }
     }
 
+    if (newConfig.temperatureOpacity || newConfig.temperatureColorScale){
+      const tempParams = {};
+      if (newConfig.temperatureOpacity) tempParams.opacity = newConfig.temperatureOpacity;
+      if (newConfig.temperatureColorScale) tempParams.colorScale = newConfig.temperatureColorScale;
+      
+      this.temperatureRenderer.setOptions(tempParams);
+      if (this.map.hasLayer(this.temperatureRenderer.canvasLayer)) {
+        this.updateTemperatureData();
+      }
+    }
+
+    if (newConfig.precipitationOpacity || newConfig.precipitationColorScale){
+      const precipParams = {};
+      if (newConfig.precipitationOpacity) precipParams.opacity = newConfig.precipitationOpacity;
+      if (newConfig.precipitationColorScale) precipParams.colorScale = newConfig.precipitationColorScale;
+      
+      this.precipitationRenderer.setOptions(precipParams);
+      if (this.map.hasLayer(this.precipitationRenderer.canvasLayer)) {
+        this.updatePrecipitationData();
+      }
+    }
+
     if (newConfig.pointDistance || newConfig.maxBounds || newConfig.maxGridPoints) {
       var {pointDistance, bounds} = this.getPointDistanceFromBounds(this.options.maxBounds ?? this.map.getBounds());
       this.currentGrid = GridUtils.gridBuilder(this.map, this.options.pointDistance ?? pointDistance, bounds, this.currentGrid.gridPointsMap, this.options);
@@ -502,8 +527,8 @@ export class MapManager {
     return this.setDateType('current', { key });
   }
 
-  getForecastData(start_date, end_date) {
-    const key = `forecast_${start_date}_${end_date}`;
+  getForecastData(date) {
+    const key = `forecast_${date}`;
 
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);//console.log("Exists", this.currentGrid);
@@ -522,13 +547,12 @@ export class MapManager {
     }
     return this.setDateType('forecast', {
       key,
-      start_date,
-      end_date
+      date
     });
   }
 
-  getHourlyForecast(start_date, end_date, hour_index) {
-    const key = `forecast_hourly_${start_date}_${end_date}_${hour_index}`;
+  getHourlyForecast(date, hour_index) {
+    const key = `forecast_hourly_${date}_${hour_index}`;
 
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);
@@ -547,9 +571,8 @@ export class MapManager {
     }
     return this.setDateType('forecast_hourly', { 
       key,
-      start_date, 
-      end_date, 
-      hour_index 
+      date,
+      hour_index
     });
   }
 
@@ -557,8 +580,8 @@ export class MapManager {
     this.options.dateType = dateType;
     
     if (dateType === 'forecast' || dateType === 'forecast_hourly') {
-      this.options.start_date = options.start_date;
-      this.options.end_date = options.end_date;
+      this.options.start_date = options.date;
+      this.options.end_date = options.date;
       this.options.hour_index = options.hour_index || null;
     } else {
       this.options.start_date = null;

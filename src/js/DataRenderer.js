@@ -191,6 +191,11 @@ class DataRenderer {
         }    
     }
 
+    setOptions(options = {}) {
+        Object.assign(this.options, options);
+        return this;
+    }
+
     _clearTemperature() {
         if (this.canvasLayer && this.canvasLayer._canvas) {
             const ctx = this.canvasLayer._canvas.getContext('2d');

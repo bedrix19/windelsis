@@ -283,6 +283,10 @@ class DataRenderer {
       this.canvasLayer.needRedraw();
     }
   }
+  setOptions(options = {}) {
+    Object.assign(this.options, options);
+    return this;
+  }
   _clearTemperature() {
     if (this.canvasLayer && this.canvasLayer._canvas) {
       const ctx = this.canvasLayer._canvas.getContext('2d');
@@ -1924,7 +1928,9 @@ class MapManager {
       end_date: options.end_date || null,
       hour_index: options.hour_index || null,
       // to-do: just use daily data and store it
-      layerControlPosition: options.layerControlPosition ?? 'topleft'
+      layerControlPosition: options.layerControlPosition ?? 'topleft',
+      temp_color_scale: options.temp_color_scale ?? _DataRenderer_js__WEBPACK_IMPORTED_MODULE_0__.COLOR_SCALES.temperature,
+      prec_color_scale: options.prec_color_scale ?? _DataRenderer_js__WEBPACK_IMPORTED_MODULE_0__.COLOR_SCALES.precipitation
     };
     this.initialize(mapId);
   }
@@ -1942,7 +1948,9 @@ class MapManager {
     }
 
     // Add base layers
-    this.setupBaseLayers();
+    if (this.options.demoMode) this.setupBaseLayers();else this.layerControl = L.control.layers({}, null, {
+      position: this.options.layerControlPosition
+    }).addTo(this.map);
 
     // Setup grid points
     this.currentGrid.gridPointsMap = new Map();
@@ -2250,7 +2258,7 @@ class MapManager {
       pixelSize: 5,
       opacity: 0.3,
       controlName: 'Temperature Layer',
-      colorScale: _DataRenderer_js__WEBPACK_IMPORTED_MODULE_0__.COLOR_SCALES.temperature,
+      colorScale: this.options.temp_color_scale,
       layerControl: this.layerControl,
       demoMode: this.options.demoMode
     });
@@ -2262,7 +2270,7 @@ class MapManager {
       pixelSize: 5,
       opacity: 0.3,
       controlName: 'Precipitation Layer',
-      colorScale: _DataRenderer_js__WEBPACK_IMPORTED_MODULE_0__.COLOR_SCALES.precipitation,
+      colorScale: this.options.prec_color_scale,
       layerControl: this.layerControl,
       demoMode: this.options.demoMode
     });
@@ -2327,6 +2335,24 @@ class MapManager {
         this.velocityLayer.addTo(this.map);
       }
     }
+    if (newConfig.temperatureOpacity || newConfig.temperatureColorScale) {
+      const tempParams = {};
+      if (newConfig.temperatureOpacity) tempParams.opacity = newConfig.temperatureOpacity;
+      if (newConfig.temperatureColorScale) tempParams.colorScale = newConfig.temperatureColorScale;
+      this.temperatureRenderer.setOptions(tempParams);
+      if (this.map.hasLayer(this.temperatureRenderer.canvasLayer)) {
+        this.updateTemperatureData();
+      }
+    }
+    if (newConfig.precipitationOpacity || newConfig.precipitationColorScale) {
+      const precipParams = {};
+      if (newConfig.precipitationOpacity) precipParams.opacity = newConfig.precipitationOpacity;
+      if (newConfig.precipitationColorScale) precipParams.colorScale = newConfig.precipitationColorScale;
+      this.precipitationRenderer.setOptions(precipParams);
+      if (this.map.hasLayer(this.precipitationRenderer.canvasLayer)) {
+        this.updatePrecipitationData();
+      }
+    }
     if (newConfig.pointDistance || newConfig.maxBounds || newConfig.maxGridPoints) {
       var {
         pointDistance,
@@ -2354,8 +2380,8 @@ class MapManager {
       key
     });
   }
-  getForecastData(start_date, end_date) {
-    const key = `forecast_${start_date}_${end_date}`;
+  getForecastData(date) {
+    const key = `forecast_${date}`;
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key); //console.log("Exists", this.currentGrid);
     } else {
@@ -2370,12 +2396,11 @@ class MapManager {
     }
     return this.setDateType('forecast', {
       key,
-      start_date,
-      end_date
+      date
     });
   }
-  getHourlyForecast(start_date, end_date, hour_index) {
-    const key = `forecast_hourly_${start_date}_${end_date}_${hour_index}`;
+  getHourlyForecast(date, hour_index) {
+    const key = `forecast_hourly_${date}_${hour_index}`;
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);
     } else {
@@ -2390,16 +2415,15 @@ class MapManager {
     }
     return this.setDateType('forecast_hourly', {
       key,
-      start_date,
-      end_date,
+      date,
       hour_index
     });
   }
   setDateType(dateType, options = {}) {
     this.options.dateType = dateType;
     if (dateType === 'forecast' || dateType === 'forecast_hourly') {
-      this.options.start_date = options.start_date;
-      this.options.end_date = options.end_date;
+      this.options.start_date = options.date;
+      this.options.end_date = options.date;
       this.options.hour_index = options.hour_index || null;
     } else {
       this.options.start_date = null;

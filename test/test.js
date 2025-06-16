@@ -34,6 +34,12 @@ let mapManager = new MapManager('map', null, {
 
 const map = mapManager.map;
 
+// Añadir capa base de OpenStreetMap
+if(!testOptions.demoMode)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
 await mapManager.getCurrentData();
 mapManager.velocityLayer.addTo(map);
 
@@ -50,7 +56,7 @@ document.getElementById('testForecast').addEventListener('click', async () => {
     alert('Please select a date before continuing');
     return;
   }
-  await mapManager.getForecastData(forecastDate, forecastDate);
+  await mapManager.getForecastData(forecastDate);
   console.log('Forecast data loaded');
   console.log(mapManager.currentGrid);
   console.log(mapManager.gridsMap);
@@ -62,7 +68,7 @@ document.getElementById('testForecastHour').addEventListener('click', async () =
     alert('Please select a date and an valid hour (0-23) before continuing');
     return;
   }
-  await mapManager.getHourlyForecast(forecastDate,forecastDate,forecastTime);
+  await mapManager.getHourlyForecast(forecastDate,forecastTime);
   console.log('Hourly Forecast data loaded');
   console.log(mapManager.currentGrid);
   console.log(mapManager.gridsMap);
@@ -132,6 +138,70 @@ document.getElementById('applyConfig').addEventListener('click', () => {
   mapManager.updateConfig(config);
 });
 
+/**************************
+ * Test color scales/opacity
+ *************************/
+function testColorScales() {
+    // Test different color scales for temperature
+    const customTempScale = [
+        { value: -10, color: [0, 0, 255] },
+        { value: 0,   color: [255, 255, 255] },
+        { value: 10,  color: [0, 255, 0] },  
+        { value: 20,  color: [255, 255, 0] },
+        { value: 30,  color: [255, 0, 0] }
+    ];
+
+    // Test different color scales for precipitation
+    const customPrecScale = [
+        { value: 0,  color: [0, 0, 0] },
+        { value: 10, color: [0, 191, 255] },
+        { value: 20, color: [0, 0, 255] },
+        { value: 30, color: [138, 43, 226] },
+        { value: 50, color: [75, 0, 130] }
+    ];
+
+    // Apply new scales
+    mapManager.updateConfig({
+        temperatureColorScale: customTempScale,
+        precipitationColorScale: customPrecScale
+    });
+
+    console.log('Custom color scales applied');
+}
+function testOpacityLevels() {
+    // Test sequence of different opacity levels
+    const opacityLevels = [0.2, 0.4, 0.6, 0.8];
+    let currentIndex = 0;
+
+    const opacityInterval = setInterval(() => {
+        if (currentIndex >= opacityLevels.length) {
+            clearInterval(opacityInterval);
+            return;
+        }
+
+        const opacity = opacityLevels[currentIndex];
+        mapManager.updateConfig({
+            temperatureOpacity: opacity,
+            precipitationOpacity: opacity
+        });
+
+        console.log(`Opacity set to: ${opacity}`);
+        currentIndex++;
+    }, 2000); // Change every 2 seconds
+}
+//testColorScales();
+//testOpacityLevels();
+// Add to your HTML
+/*
+document.getElementById('mapControls').innerHTML += `
+    <button id="testColors" class="button-style">Test Colors</button>
+    <button id="testOpacity" class="button-style">Test Opacity</button>
+`;
+
+// Add event listeners
+document.getElementById('testColors').addEventListener('click', testColorScales);
+document.getElementById('testOpacity').addEventListener('click', testOpacityLevels);
+*/
 /**************************
  * Toggle show/hide controls
  *************************/
