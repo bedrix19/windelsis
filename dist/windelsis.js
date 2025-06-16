@@ -2380,7 +2380,7 @@ class MapManager {
       key
     });
   }
-  getForecastData(date) {
+  getWeatherData(date) {
     const key = `forecast_${date}`;
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key); //console.log("Exists", this.currentGrid);
@@ -2399,7 +2399,7 @@ class MapManager {
       date
     });
   }
-  getHourlyForecast(date, hour_index) {
+  getHourlyWeatherData(date, hour_index) {
     const key = `forecast_hourly_${date}_${hour_index}`;
     if (this.gridsMap.has(key)) {
       this.currentGrid = this.gridsMap.get(key);

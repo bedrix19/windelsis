@@ -527,7 +527,7 @@ export class MapManager {
     return this.setDateType('current', { key });
   }
 
-  getForecastData(date) {
+  getWeatherData(date) {
     const key = `forecast_${date}`;
 
     if (this.gridsMap.has(key)) {
@@ -551,7 +551,7 @@ export class MapManager {
     });
   }
 
-  getHourlyForecast(date, hour_index) {
+  getHourlyWeatherData(date, hour_index) {
     const key = `forecast_hourly_${date}_${hour_index}`;
 
     if (this.gridsMap.has(key)) {

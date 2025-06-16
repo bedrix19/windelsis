@@ -42,7 +42,7 @@ document.getElementById('testForecast').addEventListener('click', async () => {
     alert('Please select a date before continuing');
     return;
   }
-  await mapManager.getForecastData(forecastDate, forecastDate);
+  await mapManager.getWeatherData(forecastDate);
   console.log('Forecast data loaded');
   console.log(mapManager.currentGrid);
   console.log(mapManager.gridsMap);
@@ -54,7 +54,7 @@ document.getElementById('testForecastHour').addEventListener('click', async () =
     alert('Please select a date and an valid hour (0-23) before continuing');
     return;
   }
-  await mapManager.getHourlyForecast(forecastDate,forecastDate,forecastTime);
+  await mapManager.getHourlyWeatherData(forecastDate,forecastTime);
   console.log('Hourly Forecast data loaded');
   console.log(mapManager.currentGrid);
   console.log(mapManager.gridsMap);
